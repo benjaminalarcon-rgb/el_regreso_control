@@ -1,0 +1,99 @@
+import { RcTask, STATUS_CFG } from '@/lib/types'
+import Avatar from '@/components/ui/Avatar'
+import { formatPlazo } from '@/lib/format'
+
+interface Props {
+  task: RcTask
+  onClick: () => void
+  selectable?: boolean
+  selected?: boolean
+  onToggle?: (id: string) => void
+}
+
+export default function TaskRow({ task, onClick, selectable, selected, onToggle }: Props) {
+  const plazo = formatPlazo(task.plazo)
+  const done = task.estado === 'Completada'
+  const sCfg = STATUS_CFG[task.estado]
+  const hasEvidence = task.foto_antes_url || task.foto_despues_url
+
+  function handleClick() {
+    if (selectable && onToggle) {
+      onToggle(task.id)
+    } else {
+      onClick()
+    }
+  }
+
+  return (
+    <div
+      onClick={handleClick}
+      className="touch-active cursor-pointer"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '14px 20px',
+        borderBottom: '1px solid rgba(128,128,128,0.08)',
+        borderLeft: selected
+          ? '3px solid #D4AF37'
+          : task.prioridad_maxima ? '3px solid #D4AF37' : '3px solid transparent',
+        background: selected ? 'rgba(212,175,55,0.06)' : 'transparent',
+        opacity: done && !selectable ? 0.55 : 1,
+        transition: 'background 0.15s',
+      }}
+    >
+      {/* Checkbox (modo selección) o Status dot */}
+      {selectable ? (
+        <div style={{
+          width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+          background: selected ? '#D4AF37' : 'transparent',
+          border: `2px solid ${selected ? '#D4AF37' : 'rgba(128,128,128,0.25)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 12, color: '#0A0A0A', fontWeight: 900,
+          transition: 'all 0.15s',
+        }}>
+          {selected && '✓'}
+        </div>
+      ) : (
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: sCfg.color, flexShrink: 0, boxShadow: `0 0 6px ${sCfg.color}60` }} />
+      )}
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+          {task.prioridad_maxima && <span style={{ fontSize: 11 }}>⚡</span>}
+          <div style={{
+            fontSize: 14, fontWeight: 700, color: done ? 'var(--muted)' : 'var(--cream)',
+            textDecoration: done ? 'line-through' : 'none',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {task.titulo}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 10, background: sCfg.bg, color: sCfg.color, fontWeight: 600, letterSpacing: 0.6, border: `1px solid ${sCfg.color}30` }}>
+            {task.estado}
+          </span>
+          {task.sub_area && <span style={{ fontSize: 9, color: 'var(--muted)' }}>{task.sub_area}</span>}
+          {hasEvidence && <span style={{ fontSize: 9, color: '#4A7A3A' }}>📸</span>}
+          {task.nota_admin && <span style={{ fontSize: 9, color: '#D4AF37' }}>★</span>}
+        </div>
+      </div>
+
+      {/* Right side */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: plazo.urgent ? '#FF6666' : 'var(--muted)', whiteSpace: 'nowrap' }}>
+          {plazo.text}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {task.contador_retrasos > 0 && (
+            <span style={{ fontSize: 9, color: '#C8542A', background: 'rgba(200,84,42,0.1)', border: '1px solid rgba(200,84,42,0.2)', borderRadius: 8, padding: '1px 6px' }}>
+              {task.contador_retrasos}R
+            </span>
+          )}
+          {task.responsable && (
+            <Avatar iniciales={task.responsable.iniciales} userId={task.responsable_id} size={24} />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
