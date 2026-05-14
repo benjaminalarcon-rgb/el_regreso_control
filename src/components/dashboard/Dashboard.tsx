@@ -262,8 +262,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         <div style={{
           padding: isDesktop ? '48px 56px 80px' : '32px 24px 100px',
-          maxWidth: isDesktop ? 860 : 600,
+          maxWidth: isDesktop ? (view === 'calendar' ? 1200 : 860) : 600,
           margin: '0 auto',
+          width: '100%',
         }}>
 
           {/* ── HOME VIEW ── */}
@@ -473,15 +474,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
           {/* ── CALENDAR VIEW ── */}
           {view === 'calendar' && (
-            <>
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: isDesktop ? 28 : 16, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>Calendario de Tareas</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>Seguimiento visual de plazos y estados</div>
-              </div>
-              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 16, padding: '20px 16px' }}>
-                <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} />
-              </div>
-            </>
+            <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} />
           )}
 
           {/* ── ANALYTICS VIEW ── */}
