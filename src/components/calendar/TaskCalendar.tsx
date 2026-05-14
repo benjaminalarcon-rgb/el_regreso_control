@@ -33,11 +33,12 @@ export default function TaskCalendar({ tasks, onTaskClick }: Props) {
 
   const tasksByDay: Record<number, RcTask[]> = {}
   for (const t of tasks) {
-    const d = new Date(t.plazo + 'T12:00:00')
-    if (d.getFullYear() === year && d.getMonth() === month) {
-      const day = d.getDate()
-      if (!tasksByDay[day]) tasksByDay[day] = []
-      tasksByDay[day].push(t)
+    // Slice to YYYY-MM-DD to avoid any timezone shift from timestamptz
+    const parts = t.plazo.slice(0, 10).split('-').map(Number)
+    const [py, pm, pd] = parts
+    if (py === year && pm - 1 === month) {
+      if (!tasksByDay[pd]) tasksByDay[pd] = []
+      tasksByDay[pd].push(t)
     }
   }
   for (const day of Object.keys(tasksByDay)) {
