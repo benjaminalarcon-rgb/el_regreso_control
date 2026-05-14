@@ -84,6 +84,34 @@ function WeeklyProgressBar({ tasks }: { tasks: RcTask[] }) {
   )
 }
 
+function TodayFocus({ tasks, onTaskClick }: { tasks: RcTask[]; onTaskClick: (t: RcTask) => void }) {
+  const todayStr = toLocalDateStr(new Date())
+  const todayTasks = tasks
+    .filter(t => t.plazo === todayStr && t.estado !== 'Completada' && t.estado !== 'Rechazada' && t.area !== CEREBRO_AREA)
+    .sort((a, b) => (b.prioridad_maxima ? 1 : 0) - (a.prioridad_maxima ? 1 : 0))
+  if (todayTasks.length === 0) return null
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <div className="pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#FF4D4D' }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#FF4D4D', letterSpacing: 1.6 }}>
+          QUÉ SIGUE HOY · {todayTasks.length} tarea{todayTasks.length > 1 ? 's' : ''}
+        </span>
+      </div>
+      <div className="today-strip">
+        {todayTasks.slice(0, 3).map(t => (
+          <TaskRow key={t.id} task={t} onClick={() => onTaskClick(t)} showMeta />
+        ))}
+        {todayTasks.length > 3 && (
+          <div style={{ padding: '10px 20px', fontSize: 11, color: '#FF4D4D', textAlign: 'center', fontWeight: 700 }}>
+            +{todayTasks.length - 3} más vencen hoy
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilter: string | null }) {
   const entries = (Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
     .filter(([key]) => macroFilter === null || macroFilter === key)
@@ -252,30 +280,34 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                 )}
               </div>
 
-              {/* Stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: isDesktop ? 12 : 8, marginBottom: 20 }}>
+              {/* Urgency chips */}
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 20, paddingBottom: 2, scrollbarWidth: 'none' }}>
                 {([
-                  { key: 'activas',     label: 'Activas',    value: activas,    color: activas > 0 ? 'var(--cream)' : 'var(--muted)' },
-                  { key: 'en-proceso',  label: 'En Proceso', value: enProceso,  color: enProceso > 0 ? '#E67E22' : 'var(--muted)' },
-                  { key: 'aprobar',     label: 'Aprobar',    value: porAprobar, color: porAprobar > 0 ? 'var(--gold)' : 'var(--muted)' },
-                  { key: 'atraso',      label: 'Atraso',     value: atrasadas,  color: atrasadas > 0 ? '#FF6B6B' : 'var(--muted)' },
-                ] as { key: FilterKey; label: string; value: number; color: string }[]).map(s => (
-                  <button
-                    key={s.key}
-                    onClick={() => { setFilterKey(s.key); setView('filter') }}
-                    className="touch-active"
-                    style={{
-                      background: 'var(--surface2)',
-                      border: `1px solid ${s.value > 0 ? s.color + '30' : 'rgba(128,128,128,0.1)'}`,
-                      borderRadius: 12, padding: isDesktop ? '18px 10px' : '14px 8px',
-                      textAlign: 'center', cursor: 'pointer', width: '100%',
-                    }}
-                  >
-                    <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                    <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.2, marginTop: 4, textTransform: 'uppercase' }}>{s.label}</div>
-                  </button>
-                ))}
+                  { key: 'activas',    icon: '◎', label: 'activas',    value: activas,    color: 'var(--cream)' },
+                  { key: 'en-proceso', icon: '▶', label: 'en proceso', value: enProceso,  color: '#E67E22' },
+                  { key: 'aprobar',    icon: '★', label: 'aprobar',    value: porAprobar, color: '#D4AF37' },
+                  { key: 'atraso',     icon: '⚠', label: 'atraso',    value: atrasadas,  color: '#FF4D4D' },
+                ] as { key: FilterKey; icon: string; label: string; value: number; color: string }[])
+                  .filter(s => s.value > 0 || s.key === 'activas')
+                  .map(s => (
+                    <button
+                      key={s.key}
+                      onClick={() => { setFilterKey(s.key); setView('filter') }}
+                      className="urgency-chip touch-active"
+                      style={{
+                        color: s.color,
+                        background: `${s.color === 'var(--cream)' ? 'rgba(244,238,223,0.07)' : s.color + '12'}`,
+                        borderColor: `${s.color === 'var(--cream)' ? 'rgba(244,238,223,0.15)' : s.color + '30'}`,
+                      }}
+                    >
+                      <span style={{ fontSize: 10 }}>{s.icon}</span>
+                      <span style={{ fontSize: 14, fontWeight: 900, lineHeight: 1 }}>{s.value}</span>
+                      <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.7 }}>{s.label}</span>
+                    </button>
+                  ))}
               </div>
+
+              <TodayFocus tasks={tasks} onTaskClick={setSelectedTask} />
 
               <WeeklyProgressBar tasks={tasks} />
 
@@ -656,12 +688,13 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
 
       {/* Nav tabs */}
-      <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.1)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.08)', flexShrink: 0 }}>
         {navItems.map(({ key, label }) => {
           const isActive = view === key || (key === 'home' && view === 'filter')
           return (
-            <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '11px 4px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: `2px solid ${isActive ? 'var(--gold)' : 'transparent'}`, fontSize: 10, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'all 0.15s' }}>
-              {label}
+            <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '10px 4px 8px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'color 0.15s' }}>
+              <div>{label}</div>
+              <div className={`nav-pill${isActive ? '' : ' inactive'}`} />
             </button>
           )
         })}

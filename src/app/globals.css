@@ -178,3 +178,72 @@ input::placeholder, textarea::placeholder {
   }
   .sidebar-nav-item.active span { color: var(--gold) !important; }
 }
+
+/* ── Design Tokens v2 ── */
+:root {
+  --radius-xl:   20px;
+  --radius-lg:   16px;
+  --radius-md:   12px;
+  --radius-sm:    8px;
+  --radius-icon: 14px;
+  --radius-pill: 100px;
+  --spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --urgent-red:    #FF4D4D;
+  --urgent-orange: #E67E22;
+  --urgent-amber:  #D4AF37;
+  --safe-green:    #4A7A3A;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Task complete: scale bounce */
+@keyframes task-done {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.08); }
+  70%  { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.task-done { animation: task-done 0.35s var(--spring); }
+
+/* Urgency chip */
+.urgency-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2px;
+  border: 1px solid; cursor: pointer; flex-shrink: 0;
+  white-space: nowrap; transition: opacity 0.12s;
+}
+.urgency-chip:active { opacity: 0.7; transform: scale(0.97); }
+
+/* Mobile bottom nav pill indicator */
+.nav-pill {
+  width: 20px; height: 3px; border-radius: 2px;
+  background: var(--gold);
+  margin: 4px auto 0;
+  transition: width 0.2s var(--spring), opacity 0.2s;
+}
+.nav-pill.inactive { width: 0; opacity: 0; }
+
+/* Today focus strip */
+.today-strip {
+  background: rgba(255,77,77,0.04);
+  border: 1px solid rgba(255,77,77,0.14);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+/* Hover lift for cards — desktop only */
+@media (hover: hover) {
+  .card-hover { transition: transform 0.15s var(--spring), box-shadow 0.15s; }
+  .card-hover:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+}

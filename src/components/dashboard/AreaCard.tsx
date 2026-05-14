@@ -5,52 +5,87 @@ import ProgressStrip from '@/components/ui/ProgressStrip'
 
 const STATUS_DOTS: TaskStatus[] = ['Asignada', 'En Proceso', 'Por Aprobar', 'Atrasada', 'Completada']
 
+function toDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function getUrgency(tasks: RcTask[]): { label: string; color: string } | null {
+  const active = tasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada')
+  if (!active.length) return null
+  const today    = toDateStr(new Date())
+  const tomorrow = toDateStr(new Date(Date.now() + 86400000))
+  const in3days  = toDateStr(new Date(Date.now() + 3 * 86400000))
+  if (active.some(t => t.plazo < today))       return null // overdue shown via ⚠ badge
+  if (active.some(t => t.plazo === today))     return { label: 'HOY',    color: '#FF4D4D' }
+  if (active.some(t => t.plazo === tomorrow))  return { label: 'MAÑANA', color: '#E67E22' }
+  if (active.some(t => t.plazo === in3days))   return { label: '3 DÍAS', color: '#D4AF37' }
+  return null
+}
+
 export default function AreaCard({ area, tasks, onClick }: { area: string; tasks: RcTask[]; onClick: () => void }) {
-  const cfg = AREA_CFG[area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
-  const atrasadas = tasks.filter(t => t.estado === 'Atrasada').length
-  const activas = tasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada').length
+  const cfg        = AREA_CFG[area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
+  const atrasadas  = tasks.filter(t => t.estado === 'Atrasada').length
+  const activas    = tasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada').length
   const completadas = tasks.filter(t => t.estado === 'Completada').length
-  const pct = tasks.length > 0 ? Math.round((completadas / tasks.length) * 100) : 0
+  const pct        = tasks.length > 0 ? Math.round((completadas / tasks.length) * 100) : 0
+  const urgency    = getUrgency(tasks)
+  const barColor   = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : cfg.color
 
   return (
     <div
       onClick={onClick}
-      className="touch-active cursor-pointer rounded-xl"
+      className="touch-active cursor-pointer card-hover"
       style={{
         background: 'var(--surface)',
-        border: `1px solid ${cfg.color}20`,
+        border: `1px solid ${atrasadas > 0 ? 'rgba(255,77,77,0.2)' : cfg.color + '18'}`,
+        borderRadius: 'var(--radius-xl)',
         padding: '16px',
         position: 'relative',
         overflow: 'hidden',
       }}
     >
-      {/* Accent line */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${cfg.color}60, transparent)` }} />
+      {/* Accent top line */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        background: `linear-gradient(90deg, ${cfg.color}70, transparent)`,
+      }} />
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+        {/* Squircle icon */}
         <div style={{
-          width: 34, height: 34, borderRadius: 8,
-          background: cfg.dim, border: `1px solid ${cfg.color}22`,
+          width: 36, height: 36, borderRadius: 'var(--radius-icon)',
+          background: cfg.dim, border: `1px solid ${cfg.color}28`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, fontWeight: 700, color: cfg.color, flexShrink: 0,
+          fontSize: 11, fontWeight: 800, color: cfg.color, flexShrink: 0,
         }}>
           {cfg.code}
         </div>
-        {atrasadas > 0 && (
+
+        {/* Badge: overdue > urgency > done */}
+        {atrasadas > 0 ? (
           <div className="pulse" style={{
-            fontSize: 9, fontWeight: 700, color: '#FF4444',
-            background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.25)',
-            borderRadius: 10, padding: '3px 8px',
+            fontSize: 9, fontWeight: 700, color: '#FF4D4D',
+            background: 'rgba(255,77,77,0.1)', border: '1px solid rgba(255,77,77,0.25)',
+            borderRadius: 'var(--radius-pill)', padding: '3px 8px',
           }}>
             {atrasadas} ⚠
           </div>
-        )}
-        {atrasadas === 0 && pct === 100 && tasks.length > 0 && (
-          <span style={{ fontSize: 14 }}>✅</span>
-        )}
+        ) : urgency ? (
+          <div style={{
+            fontSize: 9, fontWeight: 800, color: urgency.color,
+            background: `${urgency.color}15`, border: `1px solid ${urgency.color}30`,
+            borderRadius: 'var(--radius-pill)', padding: '3px 9px',
+            letterSpacing: 0.8,
+          }}>
+            {urgency.label}
+          </div>
+        ) : pct === 100 && tasks.length > 0 ? (
+          <span style={{ fontSize: 15 }}>✅</span>
+        ) : null}
       </div>
 
+      {/* Area name + count */}
       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 2, letterSpacing: -0.2 }}>
         {area}
       </div>
@@ -58,10 +93,10 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
         {activas} activa{activas !== 1 ? 's' : ''} · {completadas} lista{completadas !== 1 ? 's' : ''}
       </div>
 
-      {/* Progress */}
+      {/* Progress strip */}
       <ProgressStrip tasks={tasks} />
 
-      {/* % completado */}
+      {/* Footer: dots + percentage */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           {STATUS_DOTS.map(s => {
@@ -75,7 +110,10 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
             )
           })}
         </div>
-        <span style={{ fontSize: 10, fontWeight: 700, color: pct > 0 ? cfg.color : '#2A2522' }}>{pct}%</span>
+        <span style={{
+          fontSize: 11, fontWeight: 800,
+          color: pct > 0 ? barColor : 'rgba(128,128,128,0.2)',
+        }}>{pct}%</span>
       </div>
     </div>
   )
