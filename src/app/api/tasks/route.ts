@@ -147,8 +147,13 @@ export async function PATCH(req: NextRequest) {
   const supabase = await getSupabase()
   const { id, ...updates } = await req.json()
 
-  // Obtener estado anterior para detectar cambio a "Por Aprobar"
-  const { data: before } = await supabase.from('tasks').select('estado').eq('id', id).single()
+  // Obtener estado anterior
+  const { data: before } = await supabase.from('tasks').select('estado, started_at').eq('id', id).single()
+
+  // Capturar timestamp de inicio cuando pasa a 'En Proceso' por primera vez
+  if (updates.estado === 'En Proceso' && before?.estado === 'Asignada' && !before?.started_at) {
+    updates.started_at = new Date().toISOString()
+  }
 
   const { data, error } = await supabase
     .from('tasks')

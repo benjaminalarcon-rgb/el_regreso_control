@@ -33,6 +33,7 @@ export interface RcTask {
   foto_antes_url?: string
   foto_despues_url?: string
   resumen_cierre?: string
+  started_at?: string
 }
 
 // ── Macro categorías ──────────────────────────────────────

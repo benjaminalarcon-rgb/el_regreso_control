@@ -7,6 +7,7 @@ import {
   calcSemaphoreDistribution,
   calcNetProductivity,
   calcOTCR,
+  calcReactionTime,
   SEMAPHORE_HEX,
 } from '@/lib/kpis'
 
@@ -227,6 +228,7 @@ export default function GestionPanel({ tasks }: Props) {
   const dist        = calcSemaphoreDistribution(activeTasks)
   const netProd     = calcNetProductivity(activeTasks)
   const globalOtcr  = calcOTCR(activeTasks)
+  const reaction    = calcReactionTime(activeTasks)
 
   const areaKpis = calcAreaKpis(activeTasks, ALL_AREAS).map(kpi => ({
     ...kpi,
@@ -344,6 +346,101 @@ export default function GestionPanel({ tasks }: Props) {
             barMax={5}
             sub={`${totalComments} comentarios en ${activeTasks.length} tareas`}
           />
+
+          {/* Tiempo de Reacción — full width */}
+          <div style={{
+            gridColumn: '1 / -1',
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 20, padding: '22px 22px 18px',
+            borderTop: `3px solid ${statusColor(reaction.avgPendingDays, 1, true)}`,
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 18 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.3, marginBottom: 4 }}>
+                  Velocidad de Adopción
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>
+                  Tiempo entre la asignación de la tarea y que el responsable la inicia (cambia a En Proceso)
+                </div>
+              </div>
+              <StatusBadge ok={reaction.avgPendingDays <= 1 && reaction.pendingOver24h === 0} />
+            </div>
+
+            {/* Métricas en fila */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
+              {[
+                {
+                  label: 'Espera promedio',
+                  value: reaction.pending > 0 ? `${reaction.avgPendingDays}d` : '—',
+                  sub: 'tareas asignadas sin iniciar',
+                  color: statusColor(reaction.avgPendingDays, 1, true),
+                  big: true,
+                },
+                {
+                  label: 'Sin iniciar',
+                  value: reaction.pending,
+                  sub: 'en estado Asignada ahora',
+                  color: reaction.pending > 0 ? '#D97706' : '#16A34A',
+                  big: false,
+                },
+                {
+                  label: '> 24h sin tomar',
+                  value: reaction.pendingOver24h,
+                  sub: 'requieren atención',
+                  color: reaction.pendingOver24h > 0 ? '#DC2626' : '#16A34A',
+                  big: false,
+                },
+                {
+                  label: '> 72h sin tomar',
+                  value: reaction.pendingOver72h,
+                  sub: 'riesgo de incumplimiento',
+                  color: reaction.pendingOver72h > 0 ? '#DC2626' : 'rgba(128,128,128,0.3)',
+                  big: false,
+                },
+              ].map(m => (
+                <div key={m.label} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
+                  <div style={{ fontSize: m.big ? 36 : 28, fontWeight: 900, color: m.color, letterSpacing: -1.5, lineHeight: 1, marginBottom: 4 }}>{m.value}</div>
+                  <div style={{ fontSize: 9, color: 'var(--muted)' }}>{m.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Real data note + barra visual de pendingOver */}
+            {reaction.pending > 0 && (
+              <div>
+                <ProgressBar
+                  value={reaction.pending - reaction.pendingOver24h}
+                  max={reaction.pending}
+                  color="#16A34A"
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+                  <span style={{ fontSize: 9, color: 'var(--muted)' }}>Recién asignadas (≤ 24h)</span>
+                  <span style={{ fontSize: 9, color: 'var(--muted)' }}>Sin iniciar ({reaction.pending} total)</span>
+                </div>
+              </div>
+            )}
+
+            <div style={{ paddingTop: 14, borderTop: '1px solid rgba(128,128,128,0.08)', display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
+              <div>
+                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Fórmula</div>
+                <div style={{ fontSize: 9, color: 'var(--muted)', fontStyle: 'italic' }}>
+                  avg(started_at − created_at) · proxy: días en estado Asignada
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Meta</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>≤ 1 día · 0 tareas &gt; 24h</div>
+              </div>
+            </div>
+
+            {reaction.samplesReal > 0 && (
+              <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.15)', borderRadius: 10, fontSize: 10, color: '#16A34A' }}>
+                ✓ Dato exacto disponible para {reaction.samplesReal} tarea{reaction.samplesReal !== 1 ? 's' : ''} — promedio real: {reaction.avgDays}d desde asignación hasta inicio
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

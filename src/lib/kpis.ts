@@ -132,6 +132,49 @@ export function calcSemaphoreDistribution(tasks: RcTask[]): SemaphoreDistributio
   return dist
 }
 
+// ── KPI: Tiempo de Reacción ───────────────────────────────────
+// Días entre created_at y started_at (o proxy: días en 'Asignada' sin iniciar)
+
+export interface ReactionTimeResult {
+  avgDays: number        // promedio real (started_at - created_at) para las que tienen dato
+  samplesReal: number    // tareas con started_at capturado
+  pending: number        // tareas aún en 'Asignada'
+  pendingOver24h: number // de esas, cuántas llevan > 1 día sin iniciar
+  pendingOver72h: number // cuántas llevan > 3 días sin iniciar
+  avgPendingDays: number // promedio días en espera de las 'Asignadas'
+}
+
+export function calcReactionTime(tasks: RcTask[]): ReactionTimeResult {
+  const now = Date.now()
+
+  // Tareas con dato real (started_at registrado)
+  const started = tasks.filter(t => t.started_at && t.created_at)
+  const realDays = started.map(t =>
+    Math.max(0, (new Date(t.started_at!).getTime() - new Date(t.created_at!).getTime()) / 86_400_000)
+  )
+  const avgDays = realDays.length
+    ? Math.round((realDays.reduce((a, b) => a + b, 0) / realDays.length) * 10) / 10
+    : 0
+
+  // Tareas aún asignadas (proxy: tiempo de espera actual)
+  const asignadas = tasks.filter(t => t.estado === 'Asignada' && t.created_at)
+  const pendingDays = asignadas.map(t =>
+    Math.max(0, (now - new Date(t.created_at!).getTime()) / 86_400_000)
+  )
+  const avgPendingDays = pendingDays.length
+    ? Math.round((pendingDays.reduce((a, b) => a + b, 0) / pendingDays.length) * 10) / 10
+    : 0
+
+  return {
+    avgDays,
+    samplesReal:    started.length,
+    pending:        asignadas.length,
+    pendingOver24h: pendingDays.filter(d => d > 1).length,
+    pendingOver72h: pendingDays.filter(d => d > 3).length,
+    avgPendingDays,
+  }
+}
+
 // ── KPI por Área ──────────────────────────────────────────
 
 export interface AreaKpi {
