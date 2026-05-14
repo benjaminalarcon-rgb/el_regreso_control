@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import webpush from 'web-push'
-import { createClient } from '@supabase/supabase-js'
-import { SUPABASE_URL } from '@/lib/supabase/config'
+import { createServerClient } from '@supabase/ssr'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 
 // Vercel Cron: cada día a las 11:00 UTC (08:00 Chile UTC-3)
 export const runtime = 'nodejs'
@@ -168,10 +168,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!serviceKey) return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not set' }, { status: 500 })
-
-  const supabase = createClient(SUPABASE_URL, serviceKey)
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: { getAll: () => [], setAll: () => {} },
+  })
   const resend = new Resend(process.env.RESEND_API_KEY)
   const from = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
 
