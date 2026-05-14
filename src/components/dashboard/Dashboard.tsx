@@ -84,6 +84,53 @@ function WeeklyProgressBar({ tasks }: { tasks: RcTask[] }) {
   )
 }
 
+function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilter: string | null }) {
+  const entries = (Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
+    .filter(([key]) => macroFilter === null || macroFilter === key)
+
+  if (entries.length === 0) return null
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: entries.length > 1 ? 'repeat(2, 1fr)' : '1fr', gap: 10, marginBottom: 20 }}>
+      {entries.map(([key, macro]) => {
+        const macroTasks = tasks.filter(t => (macro.areas as readonly string[]).includes(t.area))
+        const completadas = macroTasks.filter(t => t.estado === 'Completada').length
+        const atrasadas = macroTasks.filter(t => t.estado === 'Atrasada').length
+        const activas = macroTasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada').length
+        const total = macroTasks.length
+        const pct = total === 0 ? 0 : Math.round((completadas / total) * 100)
+        const barColor = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : macro.color
+
+        return (
+          <div key={key} style={{ background: 'var(--surface2)', border: `1px solid ${macro.color}20`, borderRadius: 14, padding: '14px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 7, background: `${macro.color}18`, border: `1px solid ${macro.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: macro.color, letterSpacing: 1.2, flex: 1 }}>{macro.label.toUpperCase()}</span>
+              <span style={{ fontSize: 18, fontWeight: 900, color: barColor, lineHeight: 1 }}>{pct}%</span>
+            </div>
+            <div style={{ height: 6, background: 'rgba(128,128,128,0.15)', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${barColor}80, ${barColor})`, borderRadius: 6, transition: 'width 0.4s ease' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[
+                { label: 'listas', count: completadas, color: '#4A7A3A' },
+                { label: 'activas', count: activas, color: macro.color },
+                { label: 'atraso', count: atrasadas, color: '#FF6B6B' },
+              ].filter(s => s.count > 0).map(s => (
+                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: s.color }} />
+                  <span style={{ fontSize: 9, color: 'var(--muted)' }}>{s.count} {s.label}</span>
+                </div>
+              ))}
+              {total === 0 && <span style={{ fontSize: 9, color: 'var(--muted)' }}>Sin tareas</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 type View = 'home' | 'mis-tareas' | 'calendar' | 'filter'
 type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
@@ -231,6 +278,8 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               </div>
 
               <WeeklyProgressBar tasks={tasks} />
+
+              <MacroProgressBars tasks={tasks} macroFilter={currentMacroArea} />
 
               {/* ── Macro categorías ── */}
               {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
