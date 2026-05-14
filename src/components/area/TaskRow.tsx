@@ -1,4 +1,4 @@
-import { RcTask, STATUS_CFG } from '@/lib/types'
+import { RcTask, STATUS_CFG, AREA_CFG } from '@/lib/types'
 import Avatar from '@/components/ui/Avatar'
 import { formatPlazo } from '@/lib/format'
 
@@ -8,13 +8,19 @@ interface Props {
   selectable?: boolean
   selected?: boolean
   onToggle?: (id: string) => void
+  showMeta?: boolean   // muestra área + todos los responsables
 }
 
-export default function TaskRow({ task, onClick, selectable, selected, onToggle }: Props) {
+export default function TaskRow({ task, onClick, selectable, selected, onToggle, showMeta }: Props) {
   const plazo = formatPlazo(task.plazo)
   const done = task.estado === 'Completada'
   const sCfg = STATUS_CFG[task.estado]
   const hasEvidence = task.foto_antes_url || task.foto_despues_url
+  const areaCfg = AREA_CFG[task.area]
+  // Todos los responsables únicos
+  const allResponsables = task.responsables && task.responsables.length > 0
+    ? task.responsables
+    : task.responsable ? [task.responsable] : []
 
   function handleClick() {
     if (selectable && onToggle) {
@@ -76,6 +82,42 @@ export default function TaskRow({ task, onClick, selectable, selected, onToggle 
           {hasEvidence && <span style={{ fontSize: 9, color: '#4A7A3A' }}>📸</span>}
           {task.nota_admin && <span style={{ fontSize: 9, color: '#D4AF37' }}>★</span>}
         </div>
+
+        {/* Meta: área + responsables — solo cuando showMeta */}
+        {showMeta && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
+            {/* Área */}
+            {areaCfg && (
+              <span style={{
+                fontSize: 8, fontWeight: 700, letterSpacing: 0.8,
+                padding: '2px 6px', borderRadius: 6,
+                background: `${areaCfg.color}18`, color: areaCfg.color,
+                border: `1px solid ${areaCfg.color}30`,
+              }}>
+                {task.area}
+              </span>
+            )}
+            {/* Responsables */}
+            {allResponsables.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {allResponsables.slice(0, 3).map(r => (
+                  <span key={r.id} style={{
+                    fontSize: 8, fontWeight: 700,
+                    padding: '2px 6px', borderRadius: 6,
+                    background: 'rgba(128,128,128,0.1)', color: 'var(--muted)',
+                    border: '1px solid rgba(128,128,128,0.15)',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {r.nombre.split(' ')[0]}
+                  </span>
+                ))}
+                {allResponsables.length > 3 && (
+                  <span style={{ fontSize: 8, color: 'var(--muted)' }}>+{allResponsables.length - 3}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right side */}

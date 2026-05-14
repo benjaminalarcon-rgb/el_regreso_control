@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { RcTask, RcUser, TaskStatus, AREA_CFG, STATUS_LIST, STATUS_CFG } from '@/lib/types'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import TaskRow from './TaskRow'
 import NewTaskModal from '@/components/modals/NewTaskModal'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
@@ -22,6 +23,7 @@ interface Props {
 
 export default function AreaView({ area, initialTasks, users, isAdmin, currentUserId }: Props) {
   const router = useRouter()
+  const isDesktop = useIsDesktop()
   const cfg = AREA_CFG[area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
   const [tasks, setTasks] = useState(initialTasks)
   const [filter, setFilter] = useState<'Todas' | TaskStatus>('Todas')
@@ -144,197 +146,199 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
     return { user: u, total: myTasks.length, comp, atr, enProceso, porApr, pct, color }
   }).filter(s => s.total > 0).sort((a, b) => b.pct - a.pct)
 
-  return (
-    <div className="h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
-
-      {/* Topbar */}
-      <div className="safe-top" style={{
-        padding: '14px 20px', gap: 12, background: 'var(--surface)',
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+  // Panel izquierdo reutilizable (desktop sidebar + stats + filtros)
+  function LeftPanel() {
+    return (
+      <div style={{
+        width: isDesktop ? 260 : '100%',
+        flexShrink: 0,
+        background: 'var(--surface)',
+        borderRight: isDesktop ? '1px solid var(--border)' : 'none',
+        borderBottom: !isDesktop ? '1px solid var(--border)' : 'none',
+        display: 'flex', flexDirection: 'column',
+        overflowY: isDesktop ? 'auto' : 'visible',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          {selectMode ? (
-            <button onClick={toggleSelectMode} className="touch-active" style={{
-              padding: '8px 14px', borderRadius: 20, cursor: 'pointer',
-              background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.25)',
-              fontSize: 12, color: '#FF7070', flexShrink: 0,
-            }}>✕ Cancelar</button>
-          ) : (
-            <button onClick={() => router.push('/')} className="touch-active" style={{
-              padding: '8px 14px', borderRadius: 20, cursor: 'pointer',
-              background: 'rgba(128,128,128,0.08)', border: '1px solid rgba(128,128,128,0.15)',
-              fontSize: 12, color: 'var(--muted)', flexShrink: 0,
-            }}>← Volver</button>
-          )}
-
-          <Logo size={52} />
-          <div style={{ width: 34, height: 34, borderRadius: 10, background: cfg.dim, border: `1px solid ${cfg.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: cfg.color, flexShrink: 0 }}>
-            {cfg.code}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Header área */}
+        <div style={{ padding: isDesktop ? '20px 20px 16px' : '14px 20px', borderBottom: '1px solid rgba(128,128,128,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isDesktop ? 12 : 10 }}>
             {selectMode ? (
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#D4AF37' }}>
-                  {nSelected === 0 ? 'Selecciona tareas' : `${nSelected} seleccionada${nSelected !== 1 ? 's' : ''}`}
-                </div>
-                <div style={{ fontSize: 10, color: '#3A3530', marginTop: 1 }}>{area}</div>
-              </div>
+              <button onClick={toggleSelectMode} className="touch-active" style={{ padding: '8px 14px', borderRadius: 20, cursor: 'pointer', background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.25)', fontSize: 12, color: '#FF7070', flexShrink: 0 }}>✕ Cancelar</button>
             ) : (
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.2, lineHeight: 1 }}>{area}</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                  {tasks.length} tarea{tasks.length !== 1 ? 's' : ''}
-                  {atrasadas > 0 && <span style={{ color: '#FF4444' }}> · {atrasadas} atrasada{atrasadas > 1 ? 's' : ''}</span>}
-                  {porAprobar > 0 && <span style={{ color: '#D4AF37' }}> · {porAprobar} por aprobar</span>}
+              <button onClick={() => router.push('/')} className="touch-active" style={{ padding: '8px 14px', borderRadius: 20, cursor: 'pointer', background: 'rgba(128,128,128,0.08)', border: '1px solid rgba(128,128,128,0.15)', fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>← Volver</button>
+            )}
+            {!isDesktop && <Logo size={52} />}
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: cfg.dim, border: `1px solid ${cfg.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: cfg.color, flexShrink: 0 }}>{cfg.code}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {selectMode ? (
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#D4AF37' }}>{nSelected === 0 ? 'Selecciona tareas' : `${nSelected} seleccionada${nSelected !== 1 ? 's' : ''}`}</div>
+                  <div style={{ fontSize: 10, color: '#3A3530', marginTop: 1 }}>{area}</div>
                 </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.2, lineHeight: 1 }}>{area}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                    {tasks.length} tarea{tasks.length !== 1 ? 's' : ''}
+                    {atrasadas > 0 && <span style={{ color: '#FF4444' }}> · {atrasadas} atrasada{atrasadas > 1 ? 's' : ''}</span>}
+                    {porAprobar > 0 && <span style={{ color: '#D4AF37' }}> · {porAprobar} por aprobar</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Botones topbar */}
+            {!selectMode && (
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => setViewMode(v => v === 'lista' ? 'equipo' : 'lista')} className="touch-active" style={{ padding: '7px 10px', borderRadius: 10, cursor: 'pointer', background: viewMode === 'equipo' ? `${cfg.color}18` : 'rgba(255,255,255,0.05)', border: `1px solid ${viewMode === 'equipo' ? cfg.color + '40' : 'rgba(255,255,255,0.1)'}`, fontSize: 11, color: viewMode === 'equipo' ? cfg.color : '#8A8076', fontWeight: 600 }}>
+                  {viewMode === 'lista' ? '👥' : '≡'}
+                </button>
+                {isAdmin && (
+                  <button onClick={toggleSelectMode} className="touch-active" style={{ padding: '7px 10px', borderRadius: 10, cursor: 'pointer', background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: 11, color: '#D4AF37', fontWeight: 600 }}>☑</button>
+                )}
               </div>
+            )}
+            {selectMode && (
+              <button onClick={allSelected ? clearAll : selectAll} className="touch-active" style={{ padding: '7px 10px', borderRadius: 10, cursor: 'pointer', flexShrink: 0, background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)', fontSize: 10, color: '#D4AF37', fontWeight: 600 }}>
+                {allSelected ? '☐ Todo' : '☑ Todo'}
+              </button>
             )}
           </div>
 
-          {/* Botones de acción en topbar */}
-          {!selectMode && (
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              {/* Toggle Vista */}
-              <button onClick={() => setViewMode(v => v === 'lista' ? 'equipo' : 'lista')} className="touch-active" style={{
-                padding: '7px 10px', borderRadius: 10, cursor: 'pointer',
-                background: viewMode === 'equipo' ? `${cfg.color}18` : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${viewMode === 'equipo' ? cfg.color + '40' : 'rgba(255,255,255,0.1)'}`,
-                fontSize: 11, color: viewMode === 'equipo' ? cfg.color : '#8A8076', fontWeight: 600,
-              }}>
-                {viewMode === 'lista' ? '👥' : '≡'}
-              </button>
-              {/* Selección múltiple (solo admin) */}
-              {isAdmin && (
-                <button onClick={toggleSelectMode} className="touch-active" style={{
-                  padding: '7px 10px', borderRadius: 10, cursor: 'pointer',
-                  background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)',
-                  fontSize: 11, color: '#D4AF37', fontWeight: 600,
-                }}>☑</button>
-              )}
+          {/* Progress bar */}
+          {tasks.length > 0 && !selectMode && viewMode === 'lista' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 9, color: '#3A3530', letterSpacing: 1 }}>PROGRESO DEL ÁREA</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color }}>{pct}% ({completadas}/{tasks.length})</span>
+              </div>
+              <div style={{ height: 4, background: 'rgba(128,128,128,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: cfg.color, borderRadius: 4, transition: 'width 0.6s ease' }} />
+              </div>
             </div>
-          )}
-          {selectMode && (
-            <button onClick={allSelected ? clearAll : selectAll} className="touch-active" style={{
-              padding: '7px 10px', borderRadius: 10, cursor: 'pointer', flexShrink: 0,
-              background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)',
-              fontSize: 10, color: '#D4AF37', fontWeight: 600,
-            }}>
-              {allSelected ? '☐ Todo' : '☑ Todo'}
-            </button>
           )}
         </div>
 
-        {/* Progress bar del área */}
-        {tasks.length > 0 && !selectMode && viewMode === 'lista' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 9, color: '#3A3530', letterSpacing: 1 }}>PROGRESO DEL ÁREA</span>
-              <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color }}>{pct}% ({completadas}/{tasks.length})</span>
-            </div>
-            <div style={{ height: 4, background: 'rgba(128,128,128,0.15)', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${pct}%`, background: cfg.color, borderRadius: 4, transition: 'width 0.6s ease' }} />
-            </div>
+        {/* Filtros de estado — en desktop vertical, en mobile horizontal */}
+        {viewMode === 'lista' && (
+          <div style={isDesktop
+            ? { padding: '12px 12px', borderBottom: '1px solid rgba(128,128,128,0.08)' }
+            : { borderBottom: '1px solid rgba(128,128,128,0.1)', background: 'var(--bg)', overflowX: 'auto' }
+          }>
+            {isDesktop
+              ? (
+                <div>
+                  <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '2px 4px 8px', textTransform: 'uppercase' }}>Estado</div>
+                  {visibleTabs.map(f => {
+                    const active = f === filter
+                    return (
+                      <button key={f} onClick={() => { setFilter(f); setSelectedIds(new Set()) }} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        width: '100%', padding: '9px 12px', borderRadius: 10,
+                        border: 'none', background: active ? `${cfg.color}15` : 'transparent',
+                        cursor: 'pointer', marginBottom: 2, transition: 'background 0.15s',
+                      }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: active ? cfg.color : 'var(--muted)' }}>{f}</span>
+                        <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: active ? `${cfg.color}25` : 'rgba(128,128,128,0.1)', color: active ? cfg.color : 'var(--muted)', fontWeight: 700 }}>{counts[f]}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', padding: '0 16px', minWidth: 'max-content' }}>
+                  {visibleTabs.map(f => {
+                    const active = f === filter
+                    return (
+                      <button key={f} onClick={() => { setFilter(f); setSelectedIds(new Set()) }} style={{ padding: '11px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: `2px solid ${active ? cfg.color : 'transparent'}`, display: 'flex', alignItems: 'center', gap: 5, transition: 'border-color 0.15s' }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: active ? cfg.color : 'var(--muted)', letterSpacing: 0.8 }}>{f.toUpperCase()}</span>
+                        <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: active ? `${cfg.color}20` : 'rgba(128,128,128,0.1)', color: active ? cfg.color : 'var(--muted)' }}>{counts[f]}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            }
           </div>
         )}
-      </div>
 
-      {/* ─── VISTA LISTA ─── */}
-      {viewMode === 'lista' && (
-        <>
-          {/* Filter tabs por estado */}
-          <div style={{ borderBottom: '1px solid rgba(128,128,128,0.1)', background: 'var(--bg)', flexShrink: 0, overflowX: 'auto' }}>
-            <div style={{ display: 'flex', padding: '0 16px', minWidth: 'max-content' }}>
-              {visibleTabs.map(f => {
-                const active = f === filter
-                return (
-                  <button key={f} onClick={() => { setFilter(f); setSelectedIds(new Set()) }} style={{
-                    padding: '11px 12px', border: 'none', background: 'transparent', cursor: 'pointer',
-                    borderBottom: `2px solid ${active ? cfg.color : 'transparent'}`,
-                    display: 'flex', alignItems: 'center', gap: 5, transition: 'border-color 0.15s',
-                  }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: active ? cfg.color : 'var(--muted)', letterSpacing: 0.8 }}>{f.toUpperCase()}</span>
-                    <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: active ? `${cfg.color}20` : 'rgba(128,128,128,0.1)', color: active ? cfg.color : 'var(--muted)' }}>{counts[f]}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* ── Filtro por responsable ── */}
-          {areaUsers.length > 1 && (
-            <div style={{ background: 'var(--bg)', borderBottom: '1px solid rgba(128,128,128,0.08)', flexShrink: 0, overflowX: 'auto' }}>
-              <div style={{ display: 'flex', gap: 8, padding: '8px 16px', minWidth: 'max-content' }}>
-                {/* Chip "Todos" */}
-                <button
-                  onClick={() => setFilterUserId(null)}
-                  className="touch-active"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '5px 12px', borderRadius: 20, cursor: 'pointer',
-                    background: filterUserId === null ? `${cfg.color}18` : 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${filterUserId === null ? cfg.color + '40' : 'rgba(255,255,255,0.08)'}`,
-                    fontSize: 11, fontWeight: 600,
-                    color: filterUserId === null ? cfg.color : '#5A5450',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  Todos
+        {/* Filtro por responsable */}
+        {areaUsers.length > 1 && viewMode === 'lista' && (
+          <div style={isDesktop
+            ? { padding: '12px 12px', borderBottom: '1px solid rgba(128,128,128,0.08)' }
+            : { background: 'var(--bg)', borderBottom: '1px solid rgba(128,128,128,0.08)', overflowX: 'auto' }
+          }>
+            {isDesktop ? (
+              <div>
+                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '2px 4px 8px', textTransform: 'uppercase' }}>Responsable</div>
+                <button onClick={() => setFilterUserId(null)} className="touch-active" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '8px 12px', borderRadius: 10, border: 'none', background: filterUserId === null ? `${cfg.color}15` : 'transparent', cursor: 'pointer', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: filterUserId === null ? cfg.color : 'var(--muted)', fontWeight: 600 }}>Todos</span>
+                  <span style={{ fontSize: 10, color: filterUserId === null ? cfg.color : 'var(--muted)' }}>{tasks.filter(t => filter === 'Todas' || t.estado === filter).length}</span>
                 </button>
-                {/* Chip por persona */}
                 {areaUsers.map(u => {
                   const isActive = filterUserId === u.id
                   const myCount = tasks.filter(t => t.responsable_id === u.id && (filter === 'Todas' || t.estado === filter)).length
                   return (
-                    <button
-                      key={u.id}
-                      onClick={() => setFilterUserId(isActive ? null : u.id)}
-                      className="touch-active"
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 7,
-                        padding: '5px 12px 5px 6px', borderRadius: 20, cursor: 'pointer',
-                        background: isActive ? `${cfg.color}18` : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${isActive ? cfg.color + '40' : 'rgba(255,255,255,0.08)'}`,
-                        transition: 'all 0.15s',
-                      }}
-                    >
+                    <button key={u.id} onClick={() => setFilterUserId(isActive ? null : u.id)} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', borderRadius: 10, border: 'none', background: isActive ? `${cfg.color}15` : 'transparent', cursor: 'pointer', marginBottom: 4 }}>
                       <Avatar iniciales={u.iniciales} userId={u.id} size={22} />
-                      <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? cfg.color : 'var(--muted)' }}>
-                        {u.nombre.split(' ')[0]}
-                      </span>
-                      <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: isActive ? `${cfg.color}25` : 'rgba(128,128,128,0.1)', color: isActive ? cfg.color : 'var(--muted)' }}>
-                        {myCount}
-                      </span>
+                      <span style={{ fontSize: 12, color: isActive ? cfg.color : 'var(--muted)', flex: 1, textAlign: 'left' }}>{u.nombre.split(' ')[0]}</span>
+                      <span style={{ fontSize: 10, color: isActive ? cfg.color : 'var(--muted)', fontWeight: 700 }}>{myCount}</span>
                     </button>
                   )
                 })}
               </div>
-            </div>
-          )}
-
-          {/* Task list */}
-          <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px 0 140px' } as React.CSSProperties}>
-            {filtered.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 8 }}>
-                <span style={{ fontSize: 28 }}>✓</span>
-                <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 1.5 }}>SIN TAREAS EN ESTE ESTADO</span>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, padding: '8px 16px', minWidth: 'max-content' }}>
+                <button onClick={() => setFilterUserId(null)} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, cursor: 'pointer', background: filterUserId === null ? `${cfg.color}18` : 'rgba(255,255,255,0.04)', border: `1px solid ${filterUserId === null ? cfg.color + '40' : 'rgba(255,255,255,0.08)'}`, fontSize: 11, fontWeight: 600, color: filterUserId === null ? cfg.color : '#5A5450', transition: 'all 0.15s' }}>Todos</button>
+                {areaUsers.map(u => {
+                  const isActive = filterUserId === u.id
+                  const myCount = tasks.filter(t => t.responsable_id === u.id && (filter === 'Todas' || t.estado === filter)).length
+                  return (
+                    <button key={u.id} onClick={() => setFilterUserId(isActive ? null : u.id)} className="touch-active" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px 5px 6px', borderRadius: 20, cursor: 'pointer', background: isActive ? `${cfg.color}18` : 'rgba(255,255,255,0.04)', border: `1px solid ${isActive ? cfg.color + '40' : 'rgba(255,255,255,0.08)'}`, transition: 'all 0.15s' }}>
+                      <Avatar iniciales={u.iniciales} userId={u.id} size={22} />
+                      <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? cfg.color : 'var(--muted)' }}>{u.nombre.split(' ')[0]}</span>
+                      <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: isActive ? `${cfg.color}25` : 'rgba(128,128,128,0.1)', color: isActive ? cfg.color : 'var(--muted)' }}>{myCount}</span>
+                    </button>
+                  )
+                })}
               </div>
-            ) : filtered.map(t => (
-              <TaskRow
-                key={t.id}
-                task={t}
-                onClick={() => { if (!selectMode) setSelectedTask(t) }}
-                selectable={selectMode}
-                selected={selectedIds.has(t.id)}
-                onToggle={toggleId}
-              />
-            ))}
+            )}
           </div>
-        </>
-      )}
+        )}
 
-      {/* ─── VISTA EQUIPO ─── */}
-      {viewMode === 'equipo' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 100px' }}>
+        {/* Nueva tarea (desktop: en panel izquierdo) */}
+        {isDesktop && isAdmin && !selectMode && (
+          <div style={{ padding: '12px 12px', marginTop: 'auto', borderTop: '1px solid rgba(128,128,128,0.08)' }}>
+            <button onClick={() => setShowNew(true)} className="touch-active" style={{ width: '100%', padding: '12px', borderRadius: 12, cursor: 'pointer', background: `${cfg.color}18`, border: `1px solid ${cfg.color}40`, fontSize: 13, fontWeight: 700, color: cfg.color }}>
+              + Nueva Tarea
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Contenido derecho compartido (lista de tareas o vista equipo)
+  function RightContent() {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        {/* ─── VISTA LISTA ─── */}
+        {viewMode === 'lista' && (
+          <>
+            {/* Task list */}
+            <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: isDesktop ? '12px 0 40px' : '8px 0 140px' } as React.CSSProperties}>
+              {filtered.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 8 }}>
+                  <span style={{ fontSize: 28 }}>✓</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 1.5 }}>SIN TAREAS EN ESTE ESTADO</span>
+                </div>
+              ) : filtered.map(t => (
+                <TaskRow key={t.id} task={t} onClick={() => { if (!selectMode) setSelectedTask(t) }} selectable={selectMode} selected={selectedIds.has(t.id)} onToggle={toggleId} showMeta />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ─── VISTA EQUIPO ─── */}
+        {viewMode === 'equipo' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: isDesktop ? '16px 20px 40px' : '16px 16px 100px' }}>
           {teamStats.length === 0 ? (
             <div style={{ textAlign: 'center', paddingTop: 60, color: '#3A3530', fontSize: 13 }}>Sin tareas asignadas</div>
           ) : teamStats.map(({ user: u, total, comp, atr, enProceso, porApr, pct, color }) => (
@@ -388,10 +392,23 @@ export default function AreaView({ area, initialTasks, users, isAdmin, currentUs
             </div>
           ))}
         </div>
-      )}
+        )}
 
-      {/* FAB */}
-      {!selectMode && (
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: isDesktop ? 'row' : 'column', height: '100vh', background: 'var(--bg)' }}>
+
+      {/* Panel izquierdo */}
+      <LeftPanel />
+
+      {/* Contenido derecho */}
+      <RightContent />
+
+      {/* FAB — solo mobile */}
+      {!selectMode && !isDesktop && (
         <div style={{ position: 'fixed', bottom: 28, right: 20, zIndex: 40 }}>
           <button onClick={() => setShowNew(true)} className="touch-active" style={{
             width: 56, height: 56, borderRadius: '50%', cursor: 'pointer',

@@ -12,13 +12,14 @@ export default async function HomePage() {
 
   const [{ data: tasks }, { data: users }] = await Promise.all([
     supabase.from('tasks').select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids').order('created_at', { ascending: false }),
-    supabase.from('users').select('id, nombre, iniciales, rol, area, email, is_admin'),
+    supabase.from('users').select('id, nombre, iniciales, rol, area, email, is_admin, macro_area'),
   ])
 
   const userProfile = users?.find(u => u.email === user.email)
   const userName = userProfile?.nombre ?? user.email?.split('@')[0] ?? 'Usuario'
   const isAdmin = userProfile?.is_admin === true
   const currentUserId = userProfile?.id ?? ''
+  const currentMacroArea = userProfile?.macro_area ?? null
 
   return (
     <div className="h-screen flex flex-col">
@@ -29,6 +30,7 @@ export default async function HomePage() {
         userEmail={user.email ?? ''}
         isAdmin={isAdmin}
         currentUserId={currentUserId}
+        currentMacroArea={currentMacroArea}
       />
     </div>
   )

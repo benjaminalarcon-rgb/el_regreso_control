@@ -8,6 +8,7 @@ export interface RcUser {
   area: string
   email: string
   is_admin?: boolean
+  macro_area?: string | null   // 'comercial' | 'administracion' | null (global admin)
 }
 
 export interface RcTask {
@@ -34,7 +35,40 @@ export interface RcTask {
   resumen_cierre?: string
 }
 
-export const AREAS = ['Ventas', 'Marketing', 'Logística', 'Control de Gestión'] as const
+// ── Macro categorías ──────────────────────────────────────
+export const MACRO_AREAS = {
+  comercial: {
+    label: 'Área Comercial',
+    color: '#E67E22',
+    code: 'AC',
+    areas: ['Ventas', 'Marketing', 'Logística', 'Control de Gestión'] as const,
+  },
+  administracion: {
+    label: 'Administración',
+    color: '#5B8AA8',
+    code: 'AD',
+    areas: ['R. Humanos', 'Contabilidad', 'Finanzas'] as const,
+  },
+} as const
+
+export type MacroKey = keyof typeof MACRO_AREAS
+
+/** Devuelve la macro categoría a la que pertenece un área */
+export function getMacroKey(area: string): MacroKey {
+  if ((MACRO_AREAS.administracion.areas as readonly string[]).includes(area)) return 'administracion'
+  return 'comercial'
+}
+
+/** Usuarios elegibles para asignar en una tarea de cierta área */
+export function eligibleUsers(users: RcUser[], area: string): RcUser[] {
+  const macro = getMacroKey(area)
+  return users.filter(u => u.macro_area === macro || !u.macro_area)
+}
+
+export const AREAS = [
+  ...MACRO_AREAS.comercial.areas,
+  ...MACRO_AREAS.administracion.areas,
+] as const
 export const CEREBRO_AREA = 'Mi Cerebro'
 export const ALL_AREAS = [...AREAS, CEREBRO_AREA] as const
 
@@ -43,10 +77,16 @@ export const STATUS_LIST: TaskStatus[] = [
 ]
 
 export const AREA_CFG: Record<string, { color: string; dim: string; code: string }> = {
+  // Área Comercial
   'Ventas':               { color: '#E67E22', dim: '#1A110A', code: 'VT' },
   'Marketing':            { color: '#5B8AA8', dim: '#0A0F14', code: 'MK' },
   'Logística':            { color: '#C8542A', dim: '#180D0A', code: 'LG' },
   'Control de Gestión':   { color: '#D4AF37', dim: '#141007', code: 'CG' },
+  // Administración
+  'R. Humanos':           { color: '#8E44AD', dim: '#120A16', code: 'RH' },
+  'Contabilidad':         { color: '#16A085', dim: '#061210', code: 'CT' },
+  'Finanzas':             { color: '#27AE60', dim: '#081409', code: 'FZ' },
+  // Personal
   'Mi Cerebro':           { color: '#9B59B6', dim: '#100A14', code: 'MC' },
 }
 

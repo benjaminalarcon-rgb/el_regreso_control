@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { RcUser, RcTask, AREA_CFG } from '@/lib/types'
+import { RcUser, RcTask, AREA_CFG, eligibleUsers } from '@/lib/types'
 
 interface Props {
   area: string
@@ -12,12 +12,12 @@ interface Props {
 
 export default function NewTaskModal({ area, users, onClose, onCreated }: Props) {
   const cfg = AREA_CFG[area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
-  // Mostrar todos los usuarios disponibles sin filtrar por área
-  const allUsers = users
+  // Solo usuarios de la misma macro categoría (+ admins globales sin macro_area)
+  const allUsers = eligibleUsers(users, area)
 
   const [titulo, setTitulo] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [selectedIds, setSelectedIds] = useState<string[]>(allUsers[0] ? [allUsers[0].id] : [])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [plazo, setPlazo] = useState('')
   const [prioridad, setPrioridad] = useState(false)
   const [loading, setLoading] = useState(false)

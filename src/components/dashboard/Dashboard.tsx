@@ -2,12 +2,15 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { RcTask, RcUser, AREAS, CEREBRO_AREA, AREA_CFG } from '@/lib/types'
+import { RcTask, RcUser, CEREBRO_AREA, AREA_CFG, MACRO_AREAS, MacroKey, getMacroKey } from '@/lib/types'
+import { useIsDesktop } from '@/lib/useIsDesktop'
 import AreaCard from './AreaCard'
 import TaskDetailModal from '@/components/modals/TaskDetailModal'
 import TaskCalendar from '@/components/calendar/TaskCalendar'
+import TaskRow from '@/components/area/TaskRow'
 import Logo from '@/components/ui/Logo'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   initialTasks: RcTask[]
@@ -16,6 +19,7 @@ interface Props {
   userEmail: string
   isAdmin: boolean
   currentUserId: string
+  currentMacroArea: string | null   // null = admin global (ve todo)
 }
 
 function toLocalDateStr(d: Date): string {
@@ -35,7 +39,6 @@ function getWeekRange() {
 
 function WeeklyProgressBar({ tasks }: { tasks: RcTask[] }) {
   const { mon, sun, monStr, sunStr } = getWeekRange()
-  // Compare date strings directly to avoid UTC vs local timezone issues
   const weekTasks = tasks.filter(t =>
     t.plazo >= monStr && t.plazo <= sunStr && t.area !== CEREBRO_AREA
   )
@@ -81,14 +84,38 @@ function WeeklyProgressBar({ tasks }: { tasks: RcTask[] }) {
   )
 }
 
-type View = 'home' | 'mis-tareas' | 'calendar'
+type View = 'home' | 'mis-tareas' | 'calendar' | 'filter'
+type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
-export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId }: Props) {
+export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea }: Props) {
   const router = useRouter()
+  const isDesktop = useIsDesktop()
   const [tasks, setTasks] = useState(initialTasks)
   const [selectedTask, setSelectedTask] = useState<RcTask | null>(null)
   const [view, setView] = useState<View>('home')
+  const [filterKey, setFilterKey] = useState<FilterKey>('activas')
   const [showSettings, setShowSettings] = useState(false)
+  // Collapsible macro sections — default: all expanded
+  const [expandedMacros, setExpandedMacros] = useState<Set<MacroKey>>(
+    () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
+  )
+  const [expandedSidebarMacros, setExpandedSidebarMacros] = useState<Set<MacroKey>>(
+    () => new Set(Object.keys(MACRO_AREAS) as MacroKey[])
+  )
+  function toggleMacro(key: MacroKey) {
+    setExpandedMacros(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+  function toggleSidebarMacro(key: MacroKey) {
+    setExpandedSidebarMacros(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
 
   const activeTasks = tasks.filter(t => t.area !== CEREBRO_AREA)
   const cerebroTasks = tasks.filter(t => t.area === CEREBRO_AREA)
@@ -97,7 +124,6 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   const activas = activeTasks.filter(t => t.estado !== 'Completada').length
   const enProceso = activeTasks.filter(t => t.estado === 'En Proceso').length
   const today = new Date()
-  const todayStr = toLocalDateStr(today)
 
   const handleUpdate = useCallback((updated: RcTask) => {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
@@ -107,22 +133,16 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     setSelectedTask(null)
   }, [])
 
-  // Refrescar tareas desde el servidor al volver a la pestaña
   const refreshTasks = useCallback(async () => {
     try {
       const res = await fetch('/api/tasks', { cache: 'no-store' })
-      if (res.ok) {
-        const fresh = await res.json()
-        setTasks(fresh)
-      }
+      if (res.ok) setTasks(await res.json())
     } catch { /* silencioso */ }
   }, [])
 
   useEffect(() => {
-    // Refrescar al enfocar la ventana (volver de otra pestaña/app)
     const onFocus = () => refreshTasks()
     window.addEventListener('focus', onFocus)
-    // Refrescar también al volver visible la pestaña
     const onVisible = () => { if (document.visibilityState === 'visible') refreshTasks() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
@@ -131,78 +151,51 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     }
   }, [refreshTasks])
 
+  // ── Filter view config ──
+  const filterMap: Record<FilterKey, { label: string; color: string; items: RcTask[] }> = {
+    activas:      { label: 'Tareas Activas', color: 'var(--cream)', items: activeTasks.filter(t => t.estado !== 'Completada' && t.estado !== 'Rechazada') },
+    'en-proceso': { label: 'En Proceso',     color: '#E67E22',      items: activeTasks.filter(t => t.estado === 'En Proceso') },
+    aprobar:      { label: 'Por Aprobar',    color: '#D4AF37',      items: activeTasks.filter(t => t.estado === 'Por Aprobar') },
+    atraso:       { label: 'En Atraso',      color: '#FF6B6B',      items: activeTasks.filter(t => t.estado === 'Atrasada') },
+  }
+  const currentFilter = filterMap[filterKey]
+
   const dayName = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][today.getDay()]
   const monthName = ['enero','feb','marzo','abril','mayo','junio','julio','agosto','sep','octubre','nov','dic'][today.getMonth()]
   const initials = userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
-  return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
 
-      {/* Topbar */}
-      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <Logo size={68} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>El Regreso Control</div>
-          <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.4 }}>SISTEMA OPERATIVO EJECUTIVO</div>
-        </div>
-        <button
-          onClick={refreshTasks}
-          className="touch-active"
-          title="Actualizar"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 16, lineHeight: 1, flexShrink: 0 }}
-        >
-          ↻
-        </button>
-        {(atrasadas + porAprobar) > 0 && (
-          <div className="pulse" style={{ flexShrink: 0, padding: '4px 10px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF4444' }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#FF7070' }}>{atrasadas + porAprobar}</span>
-          </div>
-        )}
-        <button
-          onClick={() => setShowSettings(true)}
-          className="touch-active"
-          title="Configuración"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 18, lineHeight: 1, flexShrink: 0 }}
-        >
-          ⚙
-        </button>
-        <div style={{ width: 34, height: 34, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0, position: 'relative' }}>
-          {initials}
-          {isAdmin && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 12, height: 12, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7 }}>★</div>}
-        </div>
-      </div>
+  // ─────────────────────────────────────────────
+  // CONTENIDO PRINCIPAL (compartido mobile/desktop)
+  // ─────────────────────────────────────────────
+  const navItems: { key: View; icon: string; label: string }[] = [
+    { key: 'home',       icon: '⊞', label: 'Inicio' },
+    { key: 'mis-tareas', icon: '👤', label: 'Mis Tareas' },
+    { key: 'calendar',   icon: '📅', label: 'Calendario' },
+  ]
 
-      {showSettings && (
-        <SettingsPanel
-          onClose={() => setShowSettings(false)}
-          userName={userName}
-          userEmail={userEmail}
-        />
-      )}
-
-      {/* Nav tabs */}
-      <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.1)', flexShrink: 0 }}>
-        {([['home', '⊞ Inicio'], ['mis-tareas', '👤 Mis Tareas'], ['calendar', '📅 Calendario']] as [View, string][]).map(([v, label]) => (
-          <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: '11px 4px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: `2px solid ${view === v ? 'var(--gold)' : 'transparent'}`, fontSize: 10, fontWeight: 600, color: view === v ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'all 0.15s' }}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
+  function ContentArea() {
+    return (
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
-        <div style={{ padding: '22px 20px 80px', maxWidth: 600, margin: '0 auto' }}>
+        <div style={{
+          padding: isDesktop ? '32px 40px 60px' : '22px 20px 80px',
+          maxWidth: isDesktop ? 900 : 600,
+          margin: '0 auto',
+        }}>
 
           {/* ── HOME VIEW ── */}
           {view === 'home' && (
             <>
-              {/* Greeting */}
               <div style={{ marginBottom: 22 }}>
                 <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 1.8, marginBottom: 5 }}>
                   {dayName.toUpperCase()} {today.getDate()} DE {monthName.toUpperCase()}
                 </div>
-                <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1.1 }}>
+                <div style={{ fontSize: isDesktop ? 30 : 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1.1 }}>
                   Hola, {userName.split(' ')[0]}.
                 </div>
                 {isAdmin && (
@@ -213,34 +206,78 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               </div>
 
               {/* Stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
-                {[
-                  { label: 'Activas', value: activas, color: 'var(--cream)' },
-                  { label: 'En Proceso', value: enProceso, color: enProceso > 0 ? '#E67E22' : 'var(--muted)' },
-                  { label: 'Aprobar', value: porAprobar, color: porAprobar > 0 ? 'var(--gold)' : 'var(--muted)' },
-                  { label: 'Atraso', value: atrasadas, color: atrasadas > 0 ? '#FF6B6B' : 'var(--muted)' },
-                ].map(s => (
-                  <div key={s.label} style={{ background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 12, padding: '14px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: isDesktop ? 12 : 8, marginBottom: 20 }}>
+                {([
+                  { key: 'activas',     label: 'Activas',    value: activas,    color: activas > 0 ? 'var(--cream)' : 'var(--muted)' },
+                  { key: 'en-proceso',  label: 'En Proceso', value: enProceso,  color: enProceso > 0 ? '#E67E22' : 'var(--muted)' },
+                  { key: 'aprobar',     label: 'Aprobar',    value: porAprobar, color: porAprobar > 0 ? 'var(--gold)' : 'var(--muted)' },
+                  { key: 'atraso',      label: 'Atraso',     value: atrasadas,  color: atrasadas > 0 ? '#FF6B6B' : 'var(--muted)' },
+                ] as { key: FilterKey; label: string; value: number; color: string }[]).map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => { setFilterKey(s.key); setView('filter') }}
+                    className="touch-active"
+                    style={{
+                      background: 'var(--surface2)',
+                      border: `1px solid ${s.value > 0 ? s.color + '30' : 'rgba(128,128,128,0.1)'}`,
+                      borderRadius: 12, padding: isDesktop ? '18px 10px' : '14px 8px',
+                      textAlign: 'center', cursor: 'pointer', width: '100%',
+                    }}
+                  >
+                    <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
                     <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.2, marginTop: 4, textTransform: 'uppercase' }}>{s.label}</div>
-                  </div>
+                  </button>
                 ))}
               </div>
 
               <WeeklyProgressBar tasks={tasks} />
 
-              {/* Áreas */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', letterSpacing: 2 }}>ÁREAS OPERATIVAS</span>
-                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 28 }}>
-                {AREAS.map(area => (
-                  <AreaCard key={area} area={area} tasks={tasks.filter(t => t.area === area)} onClick={() => router.push(`/area/${encodeURIComponent(area)}`)} />
-                ))}
-              </div>
+              {/* ── Macro categorías ── */}
+              {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
+                .filter(([key]) => currentMacroArea === null || currentMacroArea === key)
+                .map(([key, macro]) => {
+                  const macroTasks = tasks.filter(t => (macro.areas as readonly string[]).includes(t.area))
+                  const macroActivas = macroTasks.filter(t => t.estado !== 'Completada').length
+                  const macroAtraso = macroTasks.filter(t => t.estado === 'Atrasada').length
+                  const macroCompleted = macroTasks.filter(t => t.estado === 'Completada').length
+                  const macroTotal = macroTasks.length
+                  const macroPct = macroTotal > 0 ? Math.round((macroCompleted / macroTotal) * 100) : 0
+                  const isExpanded = expandedMacros.has(key)
+                  const isAdminView = currentMacroArea === null
+                  return (
+                    <div key={key} style={{ marginBottom: 28 }}>
+                      {/* Header macro — solo visible para admins, clickable toggle */}
+                      {isAdminView && (
+                        <div
+                          onClick={() => toggleMacro(key)}
+                          className="touch-active cursor-pointer"
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isExpanded ? 14 : 0, padding: '8px 12px', borderRadius: 10, background: `${macro.color}08`, border: `1px solid ${macro.color}20`, transition: 'all 0.15s' }}
+                        >
+                          {/* Código + label */}
+                          <div style={{ width: 24, height: 24, borderRadius: 8, background: `${macro.color}20`, border: `1px solid ${macro.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: macro.color, letterSpacing: 1.5, flex: 1 }}>{macro.label.toUpperCase()}</span>
+                          {/* Badges */}
+                          {macroAtraso > 0 && <span style={{ fontSize: 9, color: '#FF6B6B', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.25)', borderRadius: 8, padding: '2px 7px' }}>{macroAtraso} ⚠</span>}
+                          {macroActivas > 0 && <span style={{ fontSize: 9, color: macro.color, background: `${macro.color}12`, borderRadius: 8, padding: '2px 7px' }}>{macroActivas} activa{macroActivas > 1 ? 's' : ''}</span>}
+                          {/* Progress pct */}
+                          <span style={{ fontSize: 10, fontWeight: 700, color: macroPct >= 80 ? '#4A7A3A' : macroPct >= 50 ? '#D4AF37' : macro.color, minWidth: 30, textAlign: 'right' }}>{macroPct}%</span>
+                          {/* Chevron */}
+                          <span style={{ fontSize: 11, color: macro.color, transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
+                        </div>
+                      )}
+                      {/* Áreas de esta macro — colapsable */}
+                      {(!isAdminView || isExpanded) && (
+                        <div style={{ display: 'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)', gap: isDesktop ? 12 : 10 }}>
+                          {macro.areas.map(area => (
+                            <AreaCard key={area} area={area} tasks={tasks.filter(t => t.area === area)} onClick={() => router.push(`/area/${encodeURIComponent(area)}`)} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              }
 
-              {/* Mi Cerebro */}
               {cerebroTasks.length > 0 && (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -270,28 +307,26 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             )
             const pendientes = misTareas.filter(t => !['Completada', 'Rechazada'].includes(t.estado))
             const completadas = misTareas.filter(t => t.estado === 'Completada')
-            const grupos: { label: string; color: string; items: typeof misTareas }[] = [
-              { label: 'Atrasadas', color: '#FF6B6B', items: misTareas.filter(t => t.estado === 'Atrasada') },
+            const grupos = [
+              { label: 'Atrasadas',   color: '#FF6B6B', items: misTareas.filter(t => t.estado === 'Atrasada') },
               { label: 'Por Aprobar', color: '#D4AF37', items: misTareas.filter(t => t.estado === 'Por Aprobar') },
-              { label: 'En Proceso', color: '#E67E22', items: misTareas.filter(t => t.estado === 'En Proceso') },
-              { label: 'Asignadas', color: '#5B8AA8', items: misTareas.filter(t => t.estado === 'Asignada') },
+              { label: 'En Proceso',  color: '#E67E22', items: misTareas.filter(t => t.estado === 'En Proceso') },
+              { label: 'Asignadas',   color: '#5B8AA8', items: misTareas.filter(t => t.estado === 'Asignada') },
               { label: 'Completadas', color: '#4A7A3A', items: completadas },
             ].filter(g => g.items.length > 0)
 
             return (
               <>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Mis Tareas</div>
+                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: 'var(--cream)', marginBottom: 4 }}>Mis Tareas</div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>{pendientes.length} pendiente{pendientes.length !== 1 ? 's' : ''} · {completadas.length} completada{completadas.length !== 1 ? 's' : ''}</div>
                 </div>
-
                 {misTareas.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '48px 20px' }}>
                     <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
                     <div style={{ fontSize: 14, color: 'var(--muted)' }}>No tienes tareas asignadas</div>
                   </div>
                 )}
-
                 {grupos.map(grupo => (
                   <div key={grupo.label} style={{ marginBottom: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -299,25 +334,9 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                       <span style={{ fontSize: 10, fontWeight: 700, color: grupo.color, letterSpacing: 1.5 }}>{grupo.label.toUpperCase()} ({grupo.items.length})</span>
                     </div>
                     <div style={{ background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 14, overflow: 'hidden' }}>
-                      {grupo.items.map(t => {
-                        const plazo = new Date(t.plazo)
-                        const hoy = new Date()
-                        const diff = Math.ceil((plazo.getTime() - hoy.getTime()) / 86400000)
-                        const plazoStr = diff < 0 ? `${Math.abs(diff)}d atrás` : diff === 0 ? 'Hoy' : `${diff}d`
-                        const urgent = diff <= 0
-                        return (
-                          <div key={t.id} onClick={() => setSelectedTask(t)} className="touch-active cursor-pointer"
-                            style={{ padding: '14px 16px', borderBottom: '1px solid rgba(128,128,128,0.08)', display: 'flex', alignItems: 'center', gap: 12, borderLeft: t.prioridad_maxima ? `3px solid ${grupo.color}` : '3px solid transparent' }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--cream)', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {t.prioridad_maxima && '⚡ '}{t.titulo}
-                              </div>
-                              <div style={{ fontSize: 10, color: 'var(--muted)' }}>{t.area}{t.nota_admin ? ' · ★ Nota admin' : ''}</div>
-                            </div>
-                            <div style={{ fontSize: 11, color: urgent ? '#FF6B6B' : 'var(--muted)', fontWeight: urgent ? 700 : 400, whiteSpace: 'nowrap' }}>{plazoStr}</div>
-                          </div>
-                        )
-                      })}
+                      {grupo.items.map(t => (
+                        <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -325,11 +344,47 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             )
           })()}
 
+          {/* ── FILTER VIEW ── */}
+          {view === 'filter' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
+                <button
+                  onClick={() => setView('home')}
+                  className="touch-active"
+                  style={{ background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.12)', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 13, color: 'var(--cream)', fontWeight: 700 }}
+                >
+                  ← Volver
+                </button>
+                <div>
+                  <div style={{ fontSize: isDesktop ? 28 : 22, fontWeight: 900, color: currentFilter.color, lineHeight: 1 }}>
+                    {currentFilter.items.length}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{currentFilter.label}</div>
+                </div>
+              </div>
+              {currentFilter.items.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+                  <div style={{ fontSize: 14, color: 'var(--muted)' }}>No hay tareas en esta categoría</div>
+                </div>
+              ) : (
+                <div style={{ background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 14, overflow: 'hidden' }}>
+                  {[...currentFilter.items]
+                    .sort((a, b) => a.plazo.localeCompare(b.plazo))
+                    .map(t => (
+                      <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
+                    ))
+                  }
+                </div>
+              )}
+            </>
+          )}
+
           {/* ── CALENDAR VIEW ── */}
           {view === 'calendar' && (
             <>
               <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>Calendario de Tareas</div>
+                <div style={{ fontSize: isDesktop ? 28 : 16, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>Calendario de Tareas</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>Seguimiento visual de plazos y estados</div>
               </div>
               <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 16, padding: '20px 16px' }}>
@@ -340,10 +395,232 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
         </div>
       </div>
+    )
+  }
 
-      {selectedTask && (
-        <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />
-      )}
+  // ─────────────────────────────────────────────
+  // LAYOUT DESKTOP — sidebar + contenido
+  // ─────────────────────────────────────────────
+  if (isDesktop) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)' }}>
+
+        {/* Sidebar */}
+        <aside style={{
+          width: 230, flexShrink: 0,
+          background: 'var(--surface)',
+          borderRight: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column',
+          overflowY: 'auto',
+        }}>
+          {/* Logo + título */}
+          <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(128,128,128,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Logo size={52} />
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.4 }}>El Regreso</div>
+                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2 }}>CONTROL</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Nav */}
+          <nav style={{ padding: '12px 10px', flex: 1 }}>
+            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '4px 10px 8px', textTransform: 'uppercase' }}>Navegación</div>
+            {navItems.map(item => {
+              const isActive = view === item.key || (item.key === 'home' && view === 'filter')
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setView(item.key)}
+                  className={`sidebar-nav-item${isActive ? ' active' : ''}`}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    width: '100%', padding: '11px 14px', borderRadius: 10,
+                    border: 'none', cursor: 'pointer', marginBottom: 2,
+                    background: isActive ? 'rgba(212,175,55,0.1)' : 'transparent',
+                    textAlign: 'left', transition: 'background 0.15s',
+                  }}
+                >
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)' }}>
+                    {item.label}
+                  </span>
+                  {/* Badge alertas */}
+                  {item.key === 'home' && (atrasadas + porAprobar) > 0 && (
+                    <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, color: '#FF7070', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 10, padding: '2px 6px' }}>
+                      {atrasadas + porAprobar}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+
+            {/* Filtros rápidos */}
+            <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '14px 10px 8px', textTransform: 'uppercase' }}>Filtros Rápidos</div>
+            {([
+              { key: 'activas',     label: 'Activas',    value: activas,    color: 'var(--cream)' },
+              { key: 'en-proceso',  label: 'En Proceso', value: enProceso,  color: '#E67E22' },
+              { key: 'aprobar',     label: 'Por Aprobar',value: porAprobar, color: '#D4AF37' },
+              { key: 'atraso',      label: 'En Atraso',  value: atrasadas,  color: '#FF6B6B' },
+            ] as { key: FilterKey; label: string; value: number; color: string }[]).map(s => (
+              <button
+                key={s.key}
+                onClick={() => { setFilterKey(s.key); setView('filter') }}
+                className="sidebar-nav-item touch-active"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  width: '100%', padding: '9px 14px', borderRadius: 10,
+                  border: 'none', cursor: 'pointer', marginBottom: 2,
+                  background: view === 'filter' && filterKey === s.key ? `${s.color}15` : 'transparent',
+                  textAlign: 'left', transition: 'background 0.15s',
+                }}
+              >
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{s.label}</span>
+                {s.value > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: s.color }}>{s.value}</span>
+                )}
+              </button>
+            ))}
+
+            {/* Áreas agrupadas por macro */}
+            {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][])
+              .filter(([key]) => currentMacroArea === null || currentMacroArea === key)
+              .map(([key, macro]) => {
+                const isSidebarExpanded = expandedSidebarMacros.has(key)
+                const isAdminView = currentMacroArea === null
+                return (
+                  <div key={key}>
+                    {/* Macro label — clickable for admins */}
+                    {isAdminView ? (
+                      <button
+                        onClick={() => toggleSidebarMacro(key)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          width: '100%', padding: '14px 10px 6px', border: 'none',
+                          background: 'transparent', cursor: 'pointer', textAlign: 'left',
+                        }}
+                      >
+                        <span style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, textTransform: 'uppercase', fontWeight: 700, flex: 1 }}>{macro.label}</span>
+                        <span style={{ fontSize: 10, color: macro.color, transition: 'transform 0.2s', display: 'inline-block', transform: isSidebarExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
+                      </button>
+                    ) : (
+                      <div style={{ fontSize: 8, color: macro.color, letterSpacing: 1.8, padding: '14px 10px 6px', textTransform: 'uppercase', fontWeight: 700 }}>Áreas</div>
+                    )}
+                    {/* Area buttons — collapsible for admins */}
+                    {(!isAdminView || isSidebarExpanded) && macro.areas.map(area => {
+                      const areaCfg = AREA_CFG[area]
+                      const count = tasks.filter(t => t.area === area && t.estado !== 'Completada').length
+                      return (
+                        <button key={area} onClick={() => router.push(`/area/${encodeURIComponent(area)}`)} className="sidebar-nav-item touch-active"
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', marginBottom: 2, background: 'transparent', textAlign: 'left', transition: 'background 0.15s' }}>
+                          <div style={{ width: 22, height: 22, borderRadius: 7, background: `${areaCfg.color}18`, border: `1px solid ${areaCfg.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: areaCfg.color, flexShrink: 0 }}>
+                            {areaCfg.code}
+                          </div>
+                          <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{area}</span>
+                          {count > 0 && <span style={{ fontSize: 10, color: areaCfg.color, fontWeight: 700 }}>{count}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })
+            }
+          </nav>
+
+          {/* Footer sidebar: usuario + acciones */}
+          <div style={{ borderTop: '1px solid rgba(128,128,128,0.1)', padding: '14px 16px' }}>
+            {/* Usuario */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0 }}>
+                {initials}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{isAdmin ? '★ Admin' : 'Usuario'}</div>
+              </div>
+              <button onClick={refreshTasks} className="touch-active" title="Actualizar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 15, padding: 4 }}>↻</button>
+            </div>
+            {/* Botones */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="touch-active"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 10, border: 'none', background: 'rgba(128,128,128,0.07)', cursor: 'pointer', marginBottom: 6 }}
+            >
+              <span style={{ fontSize: 14 }}>⚙</span>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>Configuración</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="touch-active"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 10, border: 'none', background: 'rgba(255,68,68,0.06)', cursor: 'pointer' }}
+            >
+              <span style={{ fontSize: 14 }}>🚪</span>
+              <span style={{ fontSize: 12, color: '#FF6B6B' }}>Cerrar Sesión</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Contenido principal */}
+        <ContentArea />
+
+        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
+        {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────
+  // LAYOUT MOBILE — topbar + tabs + contenido
+  // ─────────────────────────────────────────────
+  return (
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
+
+      {/* Topbar */}
+      <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <Logo size={68} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>El Regreso Control</div>
+          <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.4 }}>SISTEMA OPERATIVO EJECUTIVO</div>
+        </div>
+        <button onClick={refreshTasks} className="touch-active" title="Actualizar"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>
+          ↻
+        </button>
+        {(atrasadas + porAprobar) > 0 && (
+          <div className="pulse" style={{ flexShrink: 0, padding: '4px 10px', background: 'rgba(255,68,68,0.12)', border: '1px solid rgba(255,68,68,0.35)', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF4444' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#FF7070' }}>{atrasadas + porAprobar}</span>
+          </div>
+        )}
+        <button onClick={() => setShowSettings(true)} className="touch-active" title="Configuración"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--muted)', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
+          ⚙
+        </button>
+        <div style={{ width: 34, height: 34, borderRadius: '50%', background: isAdmin ? 'var(--gold)' : '#C06A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#0A0A0A', flexShrink: 0, position: 'relative' }}>
+          {initials}
+          {isAdmin && <div style={{ position: 'absolute', bottom: -2, right: -2, width: 12, height: 12, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7 }}>★</div>}
+        </div>
+      </div>
+
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} userName={userName} userEmail={userEmail} />}
+
+      {/* Nav tabs */}
+      <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.1)', flexShrink: 0 }}>
+        {navItems.map(({ key, label }) => {
+          const isActive = view === key || (key === 'home' && view === 'filter')
+          return (
+            <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '11px 4px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: `2px solid ${isActive ? 'var(--gold)' : 'transparent'}`, fontSize: 10, fontWeight: 600, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'all 0.15s' }}>
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      <ContentArea />
+
+      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdate} onDelete={handleDelete} isAdmin={isAdmin} currentUserId={currentUserId} />}
     </div>
   )
 }
