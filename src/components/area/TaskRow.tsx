@@ -35,15 +35,15 @@ export default function TaskRow({ task, onClick, selectable, selected, onToggle,
       onClick={handleClick}
       className="touch-active cursor-pointer task-row"
       style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '18px 20px',
-        borderBottom: '1px solid var(--row-separator, rgba(128,128,128,0.08))',
-        borderLeft: selected
-          ? '3px solid #D4AF37'
-          : `3px solid ${sCfg.color}`,
-        background: selected ? 'rgba(212,175,55,0.06)' : 'transparent',
+        display: 'flex', alignItems: 'flex-start', gap: 14,
+        padding: '18px 20px 16px',
+        background: selected ? 'rgba(212,175,55,0.06)' : 'var(--surface)',
+        border: `1px solid var(--border)`,
+        borderLeft: `4px solid ${selected ? '#D4AF37' : sCfg.color}`,
+        borderRadius: 16,
+        boxShadow: 'var(--card-shadow, none)',
         opacity: done && !selectable ? 0.45 : 1,
-        transition: 'background 0.15s',
+        transition: 'background 0.15s, box-shadow 0.15s',
       }}
     >
       {/* Checkbox (modo selección) o Status dot */}
@@ -64,29 +64,31 @@ export default function TaskRow({ task, onClick, selectable, selected, onToggle,
 
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-          {task.prioridad_maxima && <span style={{ fontSize: 11 }}>⚡</span>}
+        {/* Título — elemento dominante */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          {task.prioridad_maxima && <span style={{ fontSize: 13 }}>⚡</span>}
           <div style={{
-            fontSize: 15, fontWeight: 700, color: done ? 'var(--muted)' : 'var(--cream)',
+            fontSize: 17, fontWeight: 800, color: done ? 'var(--muted)' : 'var(--cream)',
             textDecoration: done ? 'line-through' : 'none',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            letterSpacing: -0.2,
+            letterSpacing: -0.4, lineHeight: 1.2,
           }}>
             {task.titulo}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 10, background: sCfg.bg, color: sCfg.color, fontWeight: 600, letterSpacing: 0.6, border: `1px solid ${sCfg.color}30` }}>
+        {/* Tags secundarios — claramente más pequeños */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: sCfg.bg, color: sCfg.color, fontWeight: 700, letterSpacing: 0.3, border: `1px solid ${sCfg.color}35` }}>
             {task.estado}
           </span>
-          {task.sub_area && <span style={{ fontSize: 9, color: 'var(--muted)' }}>{task.sub_area}</span>}
-          {hasEvidence && <span style={{ fontSize: 9, color: '#4A7A3A' }}>📸</span>}
-          {task.nota_admin && <span style={{ fontSize: 9, color: '#D4AF37' }}>★</span>}
+          {task.sub_area && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{task.sub_area}</span>}
+          {hasEvidence && <span style={{ fontSize: 10, color: '#4A7A3A' }}>📸</span>}
+          {task.nota_admin && <span style={{ fontSize: 10, color: '#D4AF37' }}>★</span>}
         </div>
 
         {/* Meta: área + responsables — solo cuando showMeta */}
         {showMeta && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
             {/* Área */}
             {areaCfg && (
               <span style={{
