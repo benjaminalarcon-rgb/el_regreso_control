@@ -37,9 +37,9 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
       className="touch-active cursor-pointer card-hover"
       style={{
         background: 'var(--surface)',
-        border: `1px solid ${atrasadas > 0 ? 'rgba(255,77,77,0.2)' : cfg.color + '18'}`,
-        borderRadius: 'var(--radius-xl)',
-        padding: '16px',
+        border: `1px solid ${atrasadas > 0 ? 'rgba(255,77,77,0.22)' : cfg.color + '20'}`,
+        borderRadius: 22,
+        padding: '22px 20px 18px',
         position: 'relative',
         overflow: 'hidden',
       }}
@@ -51,13 +51,14 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
       }} />
 
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
         {/* Squircle icon */}
         <div style={{
-          width: 36, height: 36, borderRadius: 'var(--radius-icon)',
-          background: cfg.dim, border: `1px solid ${cfg.color}28`,
+          width: 44, height: 44, borderRadius: 16,
+          background: cfg.dim, border: `1px solid ${cfg.color}30`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, fontWeight: 800, color: cfg.color, flexShrink: 0,
+          fontSize: 12, fontWeight: 900, color: cfg.color, flexShrink: 0,
+          letterSpacing: 0.5,
         }}>
           {cfg.code}
         </div>
@@ -86,10 +87,10 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
       </div>
 
       {/* Area name + count */}
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)', marginBottom: 2, letterSpacing: -0.2 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4, letterSpacing: -0.4 }}>
         {area}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>
         {activas} activa{activas !== 1 ? 's' : ''} · {completadas} lista{completadas !== 1 ? 's' : ''}
       </div>
 
@@ -97,7 +98,7 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
       <ProgressStrip tasks={tasks} />
 
       {/* Footer: dots + percentage */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           {STATUS_DOTS.map(s => {
             const count = tasks.filter(t => t.estado === s).length
@@ -111,7 +112,7 @@ export default function AreaCard({ area, tasks, onClick }: { area: string; tasks
           })}
         </div>
         <span style={{
-          fontSize: 11, fontWeight: 800,
+          fontSize: 14, fontWeight: 900, letterSpacing: -0.5,
           color: pct > 0 ? barColor : 'rgba(128,128,128,0.2)',
         }}>{pct}%</span>
       </div>

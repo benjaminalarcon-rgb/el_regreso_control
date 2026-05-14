@@ -130,7 +130,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
         const barColor = pct >= 80 ? '#4A7A3A' : pct >= 50 ? '#D4AF37' : macro.color
 
         return (
-          <div key={key} style={{ background: 'var(--surface2)', border: `1px solid ${macro.color}20`, borderRadius: 14, padding: '14px 16px' }}>
+          <div key={key} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}22`, borderRadius: 20, padding: '20px 22px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <div style={{ width: 22, height: 22, borderRadius: 7, background: `${macro.color}18`, border: `1px solid ${macro.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: macro.color, flexShrink: 0 }}>{macro.code}</div>
               <span style={{ fontSize: 10, fontWeight: 700, color: macro.color, letterSpacing: 1.2, flex: 1 }}>{macro.label.toUpperCase()}</span>
@@ -258,58 +258,49 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
     return (
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
         <div style={{
-          padding: isDesktop ? '32px 40px 60px' : '22px 20px 80px',
-          maxWidth: isDesktop ? 900 : 600,
+          padding: isDesktop ? '48px 56px 80px' : '32px 24px 100px',
+          maxWidth: isDesktop ? 860 : 600,
           margin: '0 auto',
         }}>
 
           {/* ── HOME VIEW ── */}
           {view === 'home' && (
             <>
-              <div style={{ marginBottom: 22 }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 1.8, marginBottom: 5 }}>
-                  {dayName.toUpperCase()} {today.getDate()} DE {monthName.toUpperCase()}
+              <div style={{ marginBottom: 40 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 2.5, marginBottom: 12, textTransform: 'uppercase' }}>
+                  {dayName} {today.getDate()} de {monthName}
                 </div>
-                <div style={{ fontSize: isDesktop ? 30 : 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.5, lineHeight: 1.1 }}>
-                  Hola, {userName.split(' ')[0]}.
+                <div style={{ fontSize: isDesktop ? 52 : 42, fontWeight: 900, color: 'var(--cream)', letterSpacing: -2, lineHeight: 1, marginBottom: 12 }}>
+                  Hola,<br />{userName.split(' ')[0]}.
                 </div>
                 {isAdmin && (
-                  <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)', borderRadius: 20 }}>
-                    <span style={{ fontSize: 9, color: '#D4AF37', letterSpacing: 1.2 }}>★ ADMINISTRADOR</span>
-                  </div>
+                  <span style={{ fontSize: 10, color: 'var(--gold)', letterSpacing: 1.5, opacity: 0.7 }}>★ Administrador</span>
                 )}
               </div>
 
-              {/* Urgency chips */}
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 20, paddingBottom: 2, scrollbarWidth: 'none' }}>
+              {/* Stats row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: isDesktop ? 14 : 10, marginBottom: 40 }}>
                 {([
-                  { key: 'activas',    icon: '◎', label: 'activas',    value: activas,    color: 'var(--cream)' },
-                  { key: 'en-proceso', icon: '▶', label: 'en proceso', value: enProceso,  color: '#E67E22' },
-                  { key: 'aprobar',    icon: '★', label: 'aprobar',    value: porAprobar, color: '#D4AF37' },
-                  { key: 'atraso',     icon: '⚠', label: 'atraso',    value: atrasadas,  color: '#FF4D4D' },
-                ] as { key: FilterKey; icon: string; label: string; value: number; color: string }[])
-                  .filter(s => s.value > 0 || s.key === 'activas')
-                  .map(s => (
-                    <button
-                      key={s.key}
-                      onClick={() => { setFilterKey(s.key); setView('filter') }}
-                      className="urgency-chip touch-active"
-                      style={{
-                        color: s.color,
-                        background: `${s.color === 'var(--cream)' ? 'rgba(244,238,223,0.07)' : s.color + '12'}`,
-                        borderColor: `${s.color === 'var(--cream)' ? 'rgba(244,238,223,0.15)' : s.color + '30'}`,
-                      }}
-                    >
-                      <span style={{ fontSize: 10 }}>{s.icon}</span>
-                      <span style={{ fontSize: 14, fontWeight: 900, lineHeight: 1 }}>{s.value}</span>
-                      <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.7 }}>{s.label}</span>
-                    </button>
-                  ))}
+                  { key: 'activas',    label: 'Activas',    value: activas,    color: 'var(--cream)', dim: 'rgba(244,238,223,0.06)' },
+                  { key: 'en-proceso', label: 'En Proceso', value: enProceso,  color: '#E67E22',      dim: 'rgba(230,126,34,0.08)' },
+                  { key: 'aprobar',    label: 'Aprobar',    value: porAprobar, color: '#D4AF37',      dim: 'rgba(212,175,55,0.08)' },
+                  { key: 'atraso',     label: 'Atraso',     value: atrasadas,  color: '#FF4D4D',      dim: 'rgba(255,77,77,0.08)' },
+                ] as { key: FilterKey; label: string; value: number; color: string; dim: string }[]).map(s => (
+                  <button key={s.key} onClick={() => { setFilterKey(s.key); setView('filter') }}
+                    className="touch-active"
+                    style={{
+                      background: s.value > 0 ? s.dim : 'var(--surface)',
+                      border: `1px solid ${s.value > 0 ? s.color + '25' : 'rgba(128,128,128,0.08)'}`,
+                      borderRadius: 18, padding: isDesktop ? '22px 14px' : '18px 10px',
+                      cursor: 'pointer', textAlign: 'center',
+                    }}>
+                    <div style={{ fontSize: isDesktop ? 36 : 28, fontWeight: 900, color: s.value > 0 ? s.color : 'rgba(128,128,128,0.25)', lineHeight: 1, letterSpacing: -1 }}>{s.value}</div>
+                    <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.3, marginTop: 6, textTransform: 'uppercase' }}>{s.label}</div>
+                  </button>
+                ))}
               </div>
 
               <TodayFocus tasks={tasks} onTaskClick={setSelectedTask} />
-
-              <WeeklyProgressBar tasks={tasks} />
 
               <MacroProgressBars tasks={tasks} macroFilter={currentMacroArea} />
 
