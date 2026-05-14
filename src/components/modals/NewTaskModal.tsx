@@ -215,30 +215,31 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
               onChange={e => { const f = e.target.files?.[0]; if (f) handleRefPhoto(f) }}
             />
             {refPhotoPreview || refPhotoUrl ? (
-              <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', background: 'var(--surface2)' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={refPhotoPreview ?? refPhotoUrl ?? ''}
-                  alt="Foto de referencia"
-                  style={{ width: '100%', display: 'block', maxHeight: 200, objectFit: 'cover' }}
-                />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)' }} />
-                <div style={{ position: 'absolute', bottom: 10, left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>
-                    {uploadingRef ? '⏳ Subiendo...' : '✓ Foto cargada'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => refInputRef.current?.click()}
-                    disabled={uploadingRef}
-                    style={{ padding: '4px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
-                  >Cambiar</button>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--surface2)', border: `1px solid ${cfg.color}25`, borderRadius: 12, padding: 10 }}>
+                {/* Thumbnail */}
+                <div style={{ width: 72, height: 72, borderRadius: 9, overflow: 'hidden', flexShrink: 0 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={refPhotoPreview ?? refPhotoUrl ?? ''}
+                    alt="Foto de referencia"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { setRefPhotoUrl(null); setRefPhotoPreview(null) }}
-                  style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >×</button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', marginBottom: 6 }}>
+                    {uploadingRef ? '⏳ Subiendo...' : '✓ Foto cargada'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" onClick={() => refInputRef.current?.click()} disabled={uploadingRef}
+                      style={{ flex: 1, padding: '5px 0', borderRadius: 8, background: `${cfg.color}15`, border: `1px solid ${cfg.color}30`, color: cfg.color, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                      ↑ Cambiar
+                    </button>
+                    <button type="button" onClick={() => { setRefPhotoUrl(null); setRefPhotoPreview(null) }} disabled={uploadingRef}
+                      style={{ flex: 1, padding: '5px 0', borderRadius: 8, background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.2)', color: '#FF6666', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                      × Quitar
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               <button

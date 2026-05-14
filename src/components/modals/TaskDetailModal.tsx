@@ -37,6 +37,9 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+
   // Evidence
   const [uploadingAntes, setUploadingAntes] = useState(false)
   const [uploadingDespues, setUploadingDespues] = useState(false)
@@ -253,19 +256,26 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
 
               {/* Foto de referencia — visible para todos */}
               {task.evidencia_url && (
-                <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${cfg.color}25` }}>
-                  <div style={{ padding: '8px 12px', background: `${cfg.color}10`, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13 }}>🖼️</span>
+                <div style={{ background: 'var(--surface2)', border: `1px solid ${cfg.color}25`, borderRadius: 14, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <span style={{ fontSize: 12 }}>🖼️</span>
                     <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color, letterSpacing: 1.4, textTransform: 'uppercase' }}>Foto de Referencia</span>
+                    <span style={{ fontSize: 9, color: 'var(--muted)', marginLeft: 'auto' }}>Toca para ampliar</span>
                   </div>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={task.evidencia_url}
-                    alt="Referencia"
-                    style={{ width: '100%', display: 'block', maxHeight: 260, objectFit: 'cover' }}
-                  />
-                  <div style={{ padding: '8px 12px', background: 'var(--surface2)', fontSize: 10, color: 'var(--muted)' }}>
-                    Imagen de referencia para completar esta tarea correctamente
+                  <div
+                    onClick={() => setLightboxUrl(task.evidencia_url!)}
+                    className="touch-active"
+                    style={{ cursor: 'zoom-in', borderRadius: 10, overflow: 'hidden', position: 'relative', display: 'inline-flex', width: '100%' }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={task.evidencia_url}
+                      alt="Referencia"
+                      style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }}
+                    />
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>⤢</div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -490,20 +500,31 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadRefPhoto(f) }}
                 />
                 {task.evidencia_url ? (
-                  <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#161616' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={task.evidencia_url} alt="Referencia" style={{ width: '100%', display: 'block', maxHeight: 200, objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', bottom: 8, left: 0, right: 0, display: 'flex', gap: 8, justifyContent: 'center' }}>
-                      <button
-                        onClick={() => refPhotoRef.current?.click()}
-                        disabled={uploadingRef}
-                        style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, cursor: 'pointer' }}
-                      >{uploadingRef ? '⏳ Subiendo...' : '🖼️ Cambiar foto'}</button>
-                      <button
-                        onClick={() => patch({ evidencia_url: null as unknown as string })}
-                        disabled={uploadingRef}
-                        style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(200,40,40,0.7)', border: '1px solid rgba(255,80,80,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer' }}
-                      >× Quitar</button>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--surface2)', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 12, padding: 10 }}>
+                    {/* Thumbnail clicable */}
+                    <div
+                      onClick={() => setLightboxUrl(task.evidencia_url!)}
+                      className="touch-active"
+                      style={{ width: 72, height: 72, borderRadius: 9, overflow: 'hidden', flexShrink: 0, cursor: 'zoom-in', position: 'relative' }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={task.evidencia_url} alt="Referencia" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>⤢</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', marginBottom: 8 }}>Foto cargada</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          onClick={() => refPhotoRef.current?.click()}
+                          disabled={uploadingRef}
+                          style={{ flex: 1, padding: '6px 0', borderRadius: 8, background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)', color: '#D4AF37', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                        >{uploadingRef ? '⏳' : '↑ Cambiar'}</button>
+                        <button
+                          onClick={() => patch({ evidencia_url: null as unknown as string })}
+                          disabled={uploadingRef}
+                          style={{ flex: 1, padding: '6px 0', borderRadius: 8, background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.2)', color: '#FF6666', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                        >× Quitar</button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -600,6 +621,31 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
           )}
         </div>
       </div>
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            style={{ position: 'absolute', top: 16, right: 16, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}
+          >×</button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt="Referencia ampliada"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 12, boxShadow: '0 8px 48px rgba(0,0,0,0.6)' }}
+          />
+        </div>
+      )}
     </div>
   )
 }
