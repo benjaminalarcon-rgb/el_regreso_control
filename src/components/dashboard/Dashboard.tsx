@@ -10,6 +10,7 @@ import TaskCalendar from '@/components/calendar/TaskCalendar'
 import TaskRow from '@/components/area/TaskRow'
 import Logo from '@/components/ui/Logo'
 import SettingsPanel from '@/components/ui/SettingsPanel'
+import GestionPanel from '@/components/dashboard/GestionPanel'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
@@ -159,7 +160,7 @@ function MacroProgressBars({ tasks, macroFilter }: { tasks: RcTask[]; macroFilte
   )
 }
 
-type View = 'home' | 'mis-tareas' | 'calendar' | 'filter'
+type View = 'home' | 'mis-tareas' | 'calendar' | 'filter' | 'analytics'
 type FilterKey = 'activas' | 'en-proceso' | 'aprobar' | 'atraso'
 
 export default function Dashboard({ initialTasks, users, userName, userEmail, isAdmin, currentUserId, currentMacroArea }: Props) {
@@ -248,11 +249,13 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
   // ─────────────────────────────────────────────
   // CONTENIDO PRINCIPAL (compartido mobile/desktop)
   // ─────────────────────────────────────────────
-  const navItems: { key: View; icon: string; label: string }[] = [
+  const navItems: { key: View; icon: string; label: string; adminOnly?: boolean }[] = [
     { key: 'home',       icon: '⊞', label: 'Inicio' },
     { key: 'mis-tareas', icon: '👤', label: 'Mis Tareas' },
     { key: 'calendar',   icon: '📅', label: 'Calendario' },
+    { key: 'analytics',  icon: '◈',  label: 'Gestión', adminOnly: true },
   ]
+  const visibleNavItems = navItems.filter(n => !n.adminOnly || isAdmin)
 
   function ContentArea() {
     return (
@@ -481,6 +484,11 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
             </>
           )}
 
+          {/* ── ANALYTICS VIEW ── */}
+          {view === 'analytics' && isAdmin && (
+            <GestionPanel tasks={tasks} />
+          )}
+
         </div>
       </div>
     )
@@ -515,7 +523,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
           {/* Nav */}
           <nav style={{ padding: '12px 10px', flex: 1 }}>
             <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.8, padding: '4px 10px 8px', textTransform: 'uppercase' }}>Navegación</div>
-            {navItems.map(item => {
+            {visibleNavItems.map(item => {
               const isActive = view === item.key || (item.key === 'home' && view === 'filter')
               return (
                 <button
@@ -696,7 +704,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
 
       {/* Nav tabs */}
       <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid rgba(128,128,128,0.08)', flexShrink: 0 }}>
-        {navItems.map(({ key, label }) => {
+        {visibleNavItems.map(({ key, label }) => {
           const isActive = view === key || (key === 'home' && view === 'filter')
           return (
             <button key={key} onClick={() => setView(key)} style={{ flex: 1, padding: '10px 4px 8px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--gold)' : 'var(--muted)', letterSpacing: 0.3, transition: 'color 0.15s' }}>

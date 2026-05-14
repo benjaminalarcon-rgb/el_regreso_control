@@ -86,27 +86,46 @@ export default function CommentsTab({ taskId, currentUserId, accentColor }: Prop
             <div style={{ fontSize: 11, color: '#3A3530', marginTop: 4 }}>Sé el primero en escribir.</div>
           </div>
         )}
-        {comments.map(c => {
+        {comments.map((c, idx) => {
           const isMe = c.user_id === currentUserId
+          const prev = comments[idx - 1]
+          const gapHrs = prev
+            ? (new Date(c.created_at).getTime() - new Date(prev.created_at).getTime()) / 3_600_000
+            : 0
+          const showGap = gapHrs >= 24
+          const gapLabel = gapHrs >= 48
+            ? `${Math.round(gapHrs / 24)} días sin actividad`
+            : 'Un día sin actividad'
           return (
-            <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: isMe ? 'row-reverse' : 'row' }}>
-              {/* Avatar */}
-              <div style={{ width: 30, height: 30, borderRadius: '50%', background: isMe ? accentColor : '#2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: isMe ? '#080808' : '#8A8076', flexShrink: 0 }}>
-                {c.user_iniciales}
-              </div>
-              {/* Bubble */}
-              <div style={{ maxWidth: '75%' }}>
-                <div style={{ fontSize: 9, color: '#5A5450', marginBottom: 4, textAlign: isMe ? 'right' : 'left', letterSpacing: 0.5 }}>
-                  {isMe ? 'Tú' : c.user_nombre} · {timeAgo(c.created_at)}
+            <div key={c.id}>
+              {showGap && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                  <span style={{ fontSize: 9, color: '#5A5450', letterSpacing: 0.8, whiteSpace: 'nowrap' }}>
+                    {gapLabel}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
                 </div>
-                <div style={{
-                  padding: '10px 14px', borderRadius: isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                  background: isMe ? `${accentColor}18` : '#1A1A1A',
-                  border: `1px solid ${isMe ? `${accentColor}30` : 'rgba(255,255,255,0.06)'}`,
-                  fontSize: 13, color: '#E8DFC8', lineHeight: 1.5,
-                  wordBreak: 'break-word',
-                }}>
-                  {c.texto}
+              )}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: isMe ? 'row-reverse' : 'row' }}>
+                {/* Avatar */}
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: isMe ? accentColor : '#2A2A2A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: isMe ? '#080808' : '#8A8076', flexShrink: 0 }}>
+                  {c.user_iniciales}
+                </div>
+                {/* Bubble */}
+                <div style={{ maxWidth: '75%' }}>
+                  <div style={{ fontSize: 9, color: '#5A5450', marginBottom: 4, textAlign: isMe ? 'right' : 'left', letterSpacing: 0.5 }}>
+                    {isMe ? 'Tú' : c.user_nombre} · {timeAgo(c.created_at)}
+                  </div>
+                  <div style={{
+                    padding: '10px 14px', borderRadius: isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                    background: isMe ? `${accentColor}18` : '#1A1A1A',
+                    border: `1px solid ${isMe ? `${accentColor}30` : 'rgba(255,255,255,0.06)'}`,
+                    fontSize: 13, color: '#E8DFC8', lineHeight: 1.5,
+                    wordBreak: 'break-word',
+                  }}>
+                    {c.texto}
+                  </div>
                 </div>
               </div>
             </div>
