@@ -6,282 +6,421 @@ import {
   calcAreaKpis,
   calcSemaphoreDistribution,
   calcNetProductivity,
+  calcOTCR,
   SEMAPHORE_HEX,
-  AreaKpi,
 } from '@/lib/kpis'
 
 const ALL_AREAS = (Object.values(MACRO_AREAS) as typeof MACRO_AREAS[MacroKey][])
   .flatMap(m => [...m.areas])
 
-interface Props {
-  tasks: RcTask[]
+interface Props { tasks: RcTask[] }
+
+// ── Helpers ───────────────────────────────────────────────────
+
+function statusColor(value: number, target: number, inverted = false): string {
+  const ratio = value / target
+  if (inverted) {
+    if (value <= target * 0.5) return '#16A34A'
+    if (value <= target)       return '#D97706'
+    return '#DC2626'
+  }
+  if (ratio >= 1)    return '#16A34A'
+  if (ratio >= 0.75) return '#D97706'
+  return '#DC2626'
 }
 
-function SemCell({ value, color }: { value: number; color: string }) {
-  if (value === 0) return <span style={{ color: 'rgba(128,128,128,0.3)', fontSize: 13 }}>—</span>
-  return (
-    <span style={{
-      fontSize: 13, fontWeight: 700, color,
-      background: `${color}15`, borderRadius: 8,
-      padding: '2px 8px', display: 'inline-block',
-    }}>{value}</span>
-  )
-}
-
-function RiskBar({ red, yellow, green, blue, total }: { red: number; yellow: number; green: number; blue: number; total: number }) {
-  if (total === 0) return <div style={{ height: 4, background: 'rgba(128,128,128,0.1)', borderRadius: 4 }} />
-  return (
-    <div style={{ display: 'flex', height: 4, borderRadius: 4, overflow: 'hidden', gap: 1 }}>
-      {red > 0    && <div style={{ flex: red,    background: SEMAPHORE_HEX.red    }} />}
-      {yellow > 0 && <div style={{ flex: yellow, background: SEMAPHORE_HEX.yellow }} />}
-      {green > 0  && <div style={{ flex: green,  background: SEMAPHORE_HEX.green  }} />}
-      {blue > 0   && <div style={{ flex: blue,   background: SEMAPHORE_HEX.blue   }} />}
-    </div>
-  )
-}
-
-function KpiCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+function StatusBadge({ ok }: { ok: boolean }) {
   return (
     <div style={{
-      background: 'var(--surface2)', border: '1px solid var(--border)',
-      borderRadius: 14, padding: '14px 16px', flex: 1, minWidth: 0,
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 100,
+      background: ok ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)',
+      border: `1px solid ${ok ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'}`,
+      fontSize: 9, fontWeight: 800, letterSpacing: 1,
+      color: ok ? '#16A34A' : '#DC2626',
     }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, color: color ?? 'var(--cream)', letterSpacing: -1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 5 }}>{sub}</div>}
+      <span style={{ fontSize: 10 }}>{ok ? '✓' : '!'}</span>
+      {ok ? 'CUMPLIDO' : 'NO CUMPLIDO'}
     </div>
   )
 }
+
+function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = Math.min(100, max > 0 ? Math.round((value / max) * 100) : 0)
+  return (
+    <div style={{ height: 6, background: 'rgba(128,128,128,0.12)', borderRadius: 6, overflow: 'hidden' }}>
+      <div style={{
+        height: '100%', width: `${pct}%`, background: color,
+        borderRadius: 6, transition: 'width 0.6s cubic-bezier(0.16,1,0.3,1)',
+      }} />
+    </div>
+  )
+}
+
+interface KpiCardProps {
+  title: string
+  description: string
+  formula: string
+  value: string | number
+  unit?: string
+  target: string
+  targetMet: boolean
+  color: string
+  barValue?: number
+  barMax?: number
+  sub?: string
+}
+
+function KpiCard({ title, description, formula, value, unit, target, targetMet, color, barValue, barMax, sub }: KpiCardProps) {
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 20, padding: '22px 22px 18px',
+      display: 'flex', flexDirection: 'column', gap: 14,
+      borderTop: `3px solid ${color}`,
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', letterSpacing: -0.3, marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>{description}</div>
+        </div>
+        <StatusBadge ok={targetMet} />
+      </div>
+
+      {/* Main number */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+        <span style={{ fontSize: 48, fontWeight: 900, lineHeight: 1, letterSpacing: -2, color }}>{value}</span>
+        {unit && <span style={{ fontSize: 18, fontWeight: 700, color, marginBottom: 4, opacity: 0.7 }}>{unit}</span>}
+      </div>
+
+      {/* Progress bar */}
+      {barValue !== undefined && barMax !== undefined && barMax > 0 && (
+        <ProgressBar value={barValue} max={barMax} color={color} />
+      )}
+
+      {/* Footer */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, borderTop: '1px solid rgba(128,128,128,0.08)' }}>
+        <div>
+          <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Fórmula</div>
+          <div style={{ fontSize: 9, color: 'var(--muted)', fontStyle: 'italic' }}>{formula}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 2 }}>Meta</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>{target}</div>
+        </div>
+      </div>
+
+      {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: -8 }}>{sub}</div>}
+    </div>
+  )
+}
+
+// ── Area ranking row ──────────────────────────────────────────
+
+function RankRow({ rank, kpi, pimponeo, isBest, isWorst }: {
+  rank: number
+  kpi: ReturnType<typeof calcAreaKpis>[0]
+  pimponeo: number
+  isBest: boolean
+  isWorst: boolean
+}) {
+  const cfg = AREA_CFG[kpi.area]
+  const otcrColor = kpi.otcr >= 85 ? '#16A34A' : kpi.otcr >= 60 ? '#D97706' : '#DC2626'
+  const accent = isBest ? '#16A34A' : isWorst ? '#DC2626' : 'transparent'
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '28px 1fr 40px 40px 40px 40px 56px 56px',
+      gap: 8, alignItems: 'center',
+      padding: '12px 16px',
+      background: isBest ? 'rgba(22,163,74,0.05)' : isWorst ? 'rgba(220,38,38,0.05)' : 'transparent',
+      borderRadius: 12,
+      borderLeft: `3px solid ${accent}`,
+      transition: 'background 0.15s',
+    }}>
+      {/* Rank */}
+      <div style={{
+        width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+        background: isBest ? 'rgba(22,163,74,0.15)' : isWorst ? 'rgba(220,38,38,0.15)' : 'rgba(128,128,128,0.1)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 9, fontWeight: 800,
+        color: isBest ? '#16A34A' : isWorst ? '#DC2626' : 'var(--muted)',
+      }}>{rank}</div>
+
+      {/* Area */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+        <div style={{
+          width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+          background: `${cfg?.color ?? '#888'}18`, border: `1px solid ${cfg?.color ?? '#888'}30`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 7, fontWeight: 800, color: cfg?.color ?? '#888',
+        }}>{cfg?.code ?? '?'}</div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cream)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kpi.area}</span>
+        {isBest && <span style={{ fontSize: 8, color: '#16A34A', fontWeight: 700, flexShrink: 0 }}>↑ Mejor</span>}
+        {isWorst && <span style={{ fontSize: 8, color: '#DC2626', fontWeight: 700, flexShrink: 0 }}>↓ Peor</span>}
+      </div>
+
+      {/* Red */}
+      <div style={{ textAlign: 'center' }}>
+        {kpi.red > 0
+          ? <span style={{ fontSize: 12, fontWeight: 800, color: SEMAPHORE_HEX.red, background: 'rgba(220,38,38,0.1)', borderRadius: 6, padding: '2px 6px' }}>{kpi.red}</span>
+          : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
+        }
+      </div>
+
+      {/* Yellow */}
+      <div style={{ textAlign: 'center' }}>
+        {kpi.yellow > 0
+          ? <span style={{ fontSize: 12, fontWeight: 700, color: SEMAPHORE_HEX.yellow }}>{kpi.yellow}</span>
+          : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
+        }
+      </div>
+
+      {/* Green */}
+      <div style={{ textAlign: 'center' }}>
+        {kpi.green > 0
+          ? <span style={{ fontSize: 12, fontWeight: 700, color: SEMAPHORE_HEX.green }}>{kpi.green}</span>
+          : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
+        }
+      </div>
+
+      {/* Blue (done) */}
+      <div style={{ textAlign: 'center' }}>
+        {kpi.blue > 0
+          ? <span style={{ fontSize: 12, fontWeight: 700, color: SEMAPHORE_HEX.blue }}>{kpi.blue}</span>
+          : <span style={{ fontSize: 11, color: 'rgba(128,128,128,0.3)' }}>—</span>
+        }
+      </div>
+
+      {/* OTCR */}
+      <div style={{ textAlign: 'center' }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: otcrColor }}>
+          {kpi.otcr > 0 ? `${kpi.otcr}%` : '—'}
+        </span>
+      </div>
+
+      {/* Pimponeo */}
+      <div style={{ textAlign: 'center' }}>
+        <span style={{ fontSize: 11, color: pimponeo >= 3 ? '#DC2626' : pimponeo >= 1.5 ? '#D97706' : 'var(--muted)' }}>
+          {pimponeo > 0 ? pimponeo.toFixed(1) : '—'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────
 
 export default function GestionPanel({ tasks }: Props) {
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
-  const [loadingCounts, setLoadingCounts] = useState(true)
 
   useEffect(() => {
     fetch('/api/analytics')
       .then(r => r.json())
-      .then(d => { setCommentCounts(d ?? {}); setLoadingCounts(false) })
-      .catch(() => setLoadingCounts(false))
+      .then(d => setCommentCounts(d ?? {}))
+      .catch(() => {})
   }, [])
 
-  const dist     = calcSemaphoreDistribution(tasks.filter(t => t.area !== 'Mi Cerebro'))
-  const netProd  = calcNetProductivity(tasks)
-  const areaKpis = calcAreaKpis(tasks, ALL_AREAS).map(kpi => ({
+  const activeTasks = tasks.filter(t => t.area !== 'Mi Cerebro')
+  const dist        = calcSemaphoreDistribution(activeTasks)
+  const netProd     = calcNetProductivity(activeTasks)
+  const globalOtcr  = calcOTCR(activeTasks)
+
+  const areaKpis = calcAreaKpis(activeTasks, ALL_AREAS).map(kpi => ({
     ...kpi,
-    pimponeo: tasks
-      .filter(t => t.area === kpi.area)
-      .reduce((sum, t) => sum + (commentCounts[t.id] ?? 0), 0) /
-      Math.max(tasks.filter(t => t.area === kpi.area).length, 1),
+    pimponeo: (() => {
+      const areaTasks = activeTasks.filter(t => t.area === kpi.area)
+      const totalComments = areaTasks.reduce((s, t) => s + (commentCounts[t.id] ?? 0), 0)
+      return areaTasks.length > 0 ? Math.round((totalComments / areaTasks.length) * 10) / 10 : 0
+    })(),
   }))
 
-  // Sort by risk: red first, then yellow
-  const sorted = [...areaKpis].sort((a, b) =>
-    b.red - a.red || b.yellow - a.yellow
-  )
+  const ranked = [...areaKpis]
+    .filter(a => a.total > 0)
+    .sort((a, b) => b.red - a.red || b.yellow - a.yellow || a.otcr - b.otcr)
 
-  const totalActive = dist.red + dist.yellow + dist.green
-  const semItems = [
-    { color: SEMAPHORE_HEX.red,    label: 'Vencidas / Urgentes', count: dist.red,    key: 'red' },
-    { color: SEMAPHORE_HEX.yellow, label: 'Próximas (1-3 días)',  count: dist.yellow, key: 'yellow' },
-    { color: SEMAPHORE_HEX.green,  label: 'En tiempo (> 3 días)', count: dist.green,  key: 'green' },
-    { color: SEMAPHORE_HEX.blue,   label: 'Completadas',          count: dist.blue,   key: 'blue' },
-  ]
+  const bestArea  = ranked.length > 0 ? [...ranked].sort((a, b) => b.otcr - a.otcr || a.red - b.red)[0]  : null
+  const worstArea = ranked.length > 0 ? ranked[0] : null
+
+  // Global pimponeo avg
+  const totalComments = Object.values(commentCounts).reduce((s, n) => s + n, 0)
+  const pimponeoProm  = activeTasks.length > 0 ? Math.round((totalComments / activeTasks.length) * 10) / 10 : 0
+
+  // Red %
+  const redPct   = dist.total > 0 ? Math.round((dist.red / dist.total) * 100) : 0
+  const today    = new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-      {/* Header */}
-      <div>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold)', letterSpacing: 2.2, textTransform: 'uppercase', marginBottom: 6 }}>
-          Panel de Control
+      {/* ── Page header ── */}
+      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 20 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold)', letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8 }}>
+          Panel de Gestión
         </div>
-        <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.8, lineHeight: 1 }}>
-          Reporte de Gestión
+        <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', letterSpacing: -1, lineHeight: 1, marginBottom: 6 }}>
+          Reporte de Desempeño
         </div>
-        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>
-          {dist.total} tareas totales · {totalActive} activas
-        </div>
-      </div>
-
-      {/* Semaphore distribution */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: '20px 20px 18px' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 14 }}>
-          Distribución Semáforo
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-          {semItems.map(s => (
-            <div key={s.key} style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              background: `${s.color}10`, border: `1px solid ${s.color}25`,
-              borderRadius: 12, padding: '12px 14px',
-            }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, flexShrink: 0, boxShadow: `0 0 8px ${s.color}60` }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: s.color, lineHeight: 1.1, letterSpacing: -0.8 }}>
-                  {s.count}
-                </div>
-              </div>
-              {totalActive > 0 && s.key !== 'blue' && (
-                <div style={{ fontSize: 11, fontWeight: 700, color: s.color, opacity: 0.7 }}>
-                  {Math.round((s.count / dist.total) * 100)}%
-                </div>
-              )}
+        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'capitalize' }}>{today}</div>
+        <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Total tareas', value: dist.total, color: 'var(--cream)' },
+            { label: 'Activas', value: dist.red + dist.yellow + dist.green, color: 'var(--cream)' },
+            { label: 'Completadas', value: dist.blue, color: SEMAPHORE_HEX.blue },
+            { label: 'Áreas evaluadas', value: ranked.length, color: 'var(--gold)' },
+          ].map(s => (
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 16, fontWeight: 900, color: s.color }}>{s.value}</span>
+              <span style={{ fontSize: 10, color: 'var(--muted)' }}>{s.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Weekly productivity */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: '20px 20px 18px' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 14 }}>
-          Productividad Semanal
+      {/* ── KPI Cards 2×2 ── */}
+      <div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>
+          Indicadores Clave de Desempeño
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+
+          {/* OTCR */}
           <KpiCard
-            label="Creadas"
-            value={netProd.created}
-            sub="esta semana"
-            color="var(--cream)"
+            title="Efectividad de Entrega"
+            description="Tareas completadas sin haber registrado retrasos sobre el total cerrado"
+            formula="Sin retrasos ÷ Total completadas"
+            value={globalOtcr.total > 0 ? globalOtcr.rate : '—'}
+            unit={globalOtcr.total > 0 ? '%' : ''}
+            target="≥ 85%"
+            targetMet={globalOtcr.rate >= 85}
+            color={statusColor(globalOtcr.rate, 85)}
+            barValue={globalOtcr.onTime}
+            barMax={globalOtcr.total}
           />
+
+          {/* Tareas en rojo */}
           <KpiCard
-            label="Cerradas"
-            value={netProd.closed}
-            sub="esta semana"
-            color={netProd.closed >= netProd.created ? '#4A7A3A' : '#E67E22'}
+            title="Nivel de Riesgo"
+            description="Porcentaje de tareas vencidas o con menos de 24h de plazo sobre el total activo"
+            formula="Tareas rojas ÷ Total activo"
+            value={redPct}
+            unit="%"
+            target="< 15%"
+            targetMet={redPct < 15}
+            color={statusColor(redPct, 15, true)}
+            barValue={dist.red}
+            barMax={dist.red + dist.yellow + dist.green || 1}
+            sub={`${dist.red} tarea${dist.red !== 1 ? 's' : ''} en estado crítico`}
           />
+
+          {/* Productividad neta */}
           <KpiCard
-            label="Balance"
-            value={netProd.balance >= 0 ? `+${netProd.balance}` : `${netProd.balance}`}
-            sub={netProd.ratio > 0 ? `ratio ${netProd.ratio}x` : 'sin cierres'}
-            color={netProd.balance >= 0 ? '#4A7A3A' : '#DC2626'}
+            title="Productividad Neta"
+            description="Relación entre tareas cerradas y creadas durante la semana actual"
+            formula="Cerradas ÷ Creadas esta semana"
+            value={netProd.created > 0 ? netProd.ratio.toFixed(1) : '—'}
+            unit={netProd.created > 0 ? 'x' : ''}
+            target="≥ 1.0x"
+            targetMet={netProd.ratio >= 1}
+            color={statusColor(netProd.ratio, 1)}
+            barValue={netProd.closed}
+            barMax={Math.max(netProd.created, netProd.closed, 1)}
+            sub={`${netProd.closed} cerradas · ${netProd.created} creadas esta semana`}
+          />
+
+          {/* Pimponeo */}
+          <KpiCard
+            title="Índice de Pimponeo"
+            description="Promedio de comentarios por tarea. Alto índice indica ambigüedad o falta de claridad en las instrucciones"
+            formula="Total comentarios ÷ Total tareas"
+            value={pimponeoProm}
+            unit="msg/t"
+            target="< 2.0"
+            targetMet={pimponeoProm < 2}
+            color={statusColor(pimponeoProm, 2, true)}
+            barValue={Math.min(pimponeoProm, 5)}
+            barMax={5}
+            sub={`${totalComments} comentarios en ${activeTasks.length} tareas`}
           />
         </div>
       </div>
 
-      {/* Area ranking */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: '20px 20px 18px' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 4 }}>
-          Ranking de Áreas · Riesgo
+      {/* ── Best / Worst spotlight ── */}
+      {(bestArea || worstArea) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {bestArea && (
+            <div style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.2)', borderRadius: 16, padding: '16px 18px' }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: '#16A34A', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 }}>↑ Mejor Área</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>{bestArea.area}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#16A34A', letterSpacing: -1, lineHeight: 1 }}>{bestArea.otcr}%</div>
+              <div style={{ fontSize: 9, color: '#16A34A', marginTop: 4, opacity: 0.8 }}>efectividad · {bestArea.red} tarea{bestArea.red !== 1 ? 's' : ''} en rojo</div>
+            </div>
+          )}
+          {worstArea && worstArea.area !== bestArea?.area && (
+            <div style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 16, padding: '16px 18px' }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: '#DC2626', letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 10 }}>↓ Mayor Riesgo</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cream)', marginBottom: 4 }}>{worstArea.area}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#DC2626', letterSpacing: -1, lineHeight: 1 }}>{worstArea.red}</div>
+              <div style={{ fontSize: 9, color: '#DC2626', marginTop: 4, opacity: 0.8 }}>tarea{worstArea.red !== 1 ? 's' : ''} en rojo · {worstArea.otcr}% efectividad</div>
+            </div>
+          )}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 16 }}>
-          Ordenado por tareas vencidas o urgentes
+      )}
+
+      {/* ── Ranking table ── */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden' }}>
+        {/* Table header */}
+        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 2 }}>Ranking de Áreas</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)' }}>Ordenado por tareas en estado crítico (rojo) · mayor riesgo primero</div>
         </div>
 
-        {/* Column headers */}
+        {/* Column labels */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 36px 36px 36px 36px 52px 52px',
-          gap: 6, padding: '0 4px 8px',
-          borderBottom: '1px solid rgba(128,128,128,0.1)',
-          marginBottom: 8,
+          gridTemplateColumns: '28px 1fr 40px 40px 40px 40px 56px 56px',
+          gap: 8, padding: '10px 16px',
+          borderBottom: '1px solid rgba(128,128,128,0.08)',
         }}>
-          {['Área', '🔴', '🟡', '🟢', '🔵', 'OTCR', 'Desv.'].map((h, i) => (
+          {['#', 'Área', '🔴', '🟡', '🟢', '🔵', 'OTCR', 'Ping'].map((h, i) => (
             <div key={i} style={{
-              fontSize: 8, fontWeight: 700, color: 'var(--muted)',
-              letterSpacing: 0.8, textAlign: i > 0 ? 'center' : 'left',
+              fontSize: 8, fontWeight: 800, color: 'var(--muted)',
+              letterSpacing: 1, textTransform: 'uppercase',
+              textAlign: i > 1 ? 'center' : 'left',
             }}>{h}</div>
           ))}
         </div>
 
-        {sorted.filter(a => a.total > 0).map((kpi, idx) => {
-          const cfg = AREA_CFG[kpi.area]
-          const otcrColor = kpi.otcr >= 80 ? '#4A7A3A' : kpi.otcr >= 60 ? '#D97706' : '#DC2626'
-          return (
-            <div key={kpi.area} style={{
-              display: 'flex', flexDirection: 'column', gap: 5,
-              padding: '10px 4px',
-              borderBottom: idx < sorted.filter(a => a.total > 0).length - 1 ? '1px solid rgba(128,128,128,0.06)' : 'none',
-            }}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 36px 36px 36px 36px 52px 52px',
-                gap: 6, alignItems: 'center',
-              }}>
-                {/* Area name */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{
-                    width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                    background: `${cfg?.color ?? '#888'}18`, border: `1px solid ${cfg?.color ?? '#888'}30`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 7, fontWeight: 800, color: cfg?.color ?? '#888',
-                  }}>
-                    {cfg?.code ?? '?'}
-                  </div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, color: 'var(--cream)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>{kpi.area}</span>
-                </div>
-                {/* Semaphore cells */}
-                <div style={{ textAlign: 'center' }}><SemCell value={kpi.red}    color={SEMAPHORE_HEX.red}    /></div>
-                <div style={{ textAlign: 'center' }}><SemCell value={kpi.yellow} color={SEMAPHORE_HEX.yellow} /></div>
-                <div style={{ textAlign: 'center' }}><SemCell value={kpi.green}  color={SEMAPHORE_HEX.green}  /></div>
-                <div style={{ textAlign: 'center' }}><SemCell value={kpi.blue}   color={SEMAPHORE_HEX.blue}   /></div>
-                {/* OTCR */}
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: otcrColor }}>
-                    {kpi.otcr > 0 ? `${kpi.otcr}%` : '—'}
-                  </span>
-                </div>
-                {/* Deviation */}
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: 12, color: kpi.deviationAvg > 0 ? '#E67E22' : 'rgba(128,128,128,0.3)' }}>
-                    {kpi.deviationAvg > 0 ? `${kpi.deviationAvg}R` : '—'}
-                  </span>
-                </div>
-              </div>
-              {/* Risk mini-bar */}
-              <RiskBar red={kpi.red} yellow={kpi.yellow} green={kpi.green} blue={kpi.blue} total={kpi.total} />
+        {/* Rows */}
+        <div style={{ padding: '8px 8px' }}>
+          {ranked.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', fontSize: 12, color: 'var(--muted)' }}>
+              Sin datos disponibles
             </div>
-          )
-        })}
-
-        {sorted.filter(a => a.total > 0).length === 0 && (
-          <div style={{ textAlign: 'center', padding: '24px 0', fontSize: 12, color: 'var(--muted)' }}>
-            Sin datos disponibles
-          </div>
-        )}
-      </div>
-
-      {/* Pimponeo ranking */}
-      {!loadingCounts && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, padding: '20px 20px 18px' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 4 }}>
-            Ratio de Pimponeo
-          </div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 16 }}>
-            Comentarios promedio por tarea por área
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[...areaKpis]
-              .filter(a => a.total > 0)
-              .sort((a, b) => b.pimponeo - a.pimponeo)
-              .slice(0, 8)
-              .map(kpi => {
-                const cfg = AREA_CFG[kpi.area]
-                const maxPimponeo = Math.max(...areaKpis.map(a => a.pimponeo), 1)
-                const barWidth = Math.round((kpi.pimponeo / maxPimponeo) * 100)
-                const color = kpi.pimponeo >= 3 ? '#DC2626' : kpi.pimponeo >= 1.5 ? '#D97706' : '#4A7A3A'
-                return (
-                  <div key={kpi.area} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, background: `${cfg?.color ?? '#888'}18`, border: `1px solid ${cfg?.color ?? '#888'}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: cfg?.color ?? '#888' }}>
-                      {cfg?.code ?? '?'}
-                    </div>
-                    <span style={{ fontSize: 11, color: 'var(--muted)', width: 90, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kpi.area}</span>
-                    <div style={{ flex: 1, height: 6, background: 'rgba(128,128,128,0.1)', borderRadius: 4, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${barWidth}%`, background: color, borderRadius: 4, transition: 'width 0.4s ease' }} />
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color, width: 32, textAlign: 'right', flexShrink: 0 }}>
-                      {kpi.pimponeo.toFixed(1)}
-                    </span>
-                  </div>
-                )
-              })
-            }
-          </div>
+          ) : ranked.map((kpi, idx) => (
+            <RankRow
+              key={kpi.area}
+              rank={idx + 1}
+              kpi={kpi}
+              pimponeo={kpi.pimponeo}
+              isBest={kpi.area === bestArea?.area}
+              isWorst={kpi.area === worstArea?.area && kpi.area !== bestArea?.area}
+            />
+          ))}
         </div>
-      )}
+
+        {/* Legend */}
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {[
+            { label: 'OTCR: Efectividad de entrega (meta ≥ 85%)', color: 'var(--muted)' },
+            { label: 'Ping: Comentarios promedio por tarea (meta < 2)', color: 'var(--muted)' },
+          ].map(l => (
+            <span key={l.label} style={{ fontSize: 9, color: l.color }}>{l.label}</span>
+          ))}
+        </div>
+      </div>
 
     </div>
   )
