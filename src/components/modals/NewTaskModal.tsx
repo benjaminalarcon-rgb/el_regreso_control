@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { RcUser, RcTask, AREA_CFG, eligibleUsers } from '@/lib/types'
+import { createClient } from '@/lib/supabase/client'
+import { compressImage } from '@/lib/compress-image'
 
 interface Props {
   area: string
@@ -12,7 +14,6 @@ interface Props {
 
 export default function NewTaskModal({ area, users, onClose, onCreated }: Props) {
   const cfg = AREA_CFG[area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
-  // Solo usuarios de la misma macro categoría (+ admins globales sin macro_area)
   const allUsers = eligibleUsers(users, area)
 
   const [titulo, setTitulo] = useState('')
@@ -23,7 +24,35 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Foto de referencia
+  const [refPhotoUrl, setRefPhotoUrl] = useState<string | null>(null)
+  const [refPhotoPreview, setRefPhotoPreview] = useState<string | null>(null)
+  const [uploadingRef, setUploadingRef] = useState(false)
+  const refInputRef = useRef<HTMLInputElement>(null)
+
   const canSubmit = titulo.trim().length > 0 && plazo && selectedIds.length > 0
+
+  async function handleRefPhoto(file: File) {
+    setUploadingRef(true)
+    try {
+      const supabase = createClient()
+      const compressed = await compressImage(file, { maxDim: 1200, quality: 0.78 })
+      const path = `tasks/ref-${Date.now()}.jpg`
+      const { error: uploadErr } = await supabase.storage
+        .from('task-evidence')
+        .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      if (uploadErr) throw uploadErr
+      const { data: { publicUrl } } = supabase.storage.from('task-evidence').getPublicUrl(path)
+      setRefPhotoUrl(publicUrl)
+      // Local preview
+      const reader = new FileReader()
+      reader.onload = e => setRefPhotoPreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+    } catch (e) {
+      console.error('Upload ref photo error:', e)
+    }
+    setUploadingRef(false)
+  }
 
   function toggleUser(id: string) {
     setSelectedIds(prev =>
@@ -50,6 +79,7 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
           responsable_ids: selectedIds,
           plazo,
           prioridad_maxima: prioridad,
+          evidencia_url: refPhotoUrl ?? undefined,
         }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -172,6 +202,66 @@ export default function NewTaskModal({ area, users, onClose, onCreated }: Props)
           <div>
             <label style={labelStyle}>Plazo *</label>
             <input type="date" value={plazo} onChange={e => setPlazo(e.target.value)} min={minDate} required style={{ borderRadius: 12 }} />
+          </div>
+
+          {/* Foto de referencia */}
+          <div>
+            <label style={labelStyle}>Foto de referencia <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opcional)</span></label>
+            <input
+              ref={refInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleRefPhoto(f) }}
+            />
+            {refPhotoPreview || refPhotoUrl ? (
+              <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', background: 'var(--surface2)' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={refPhotoPreview ?? refPhotoUrl ?? ''}
+                  alt="Foto de referencia"
+                  style={{ width: '100%', display: 'block', maxHeight: 200, objectFit: 'cover' }}
+                />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)' }} />
+                <div style={{ position: 'absolute', bottom: 10, left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 10, color: '#fff', fontWeight: 700 }}>
+                    {uploadingRef ? '⏳ Subiendo...' : '✓ Foto cargada'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => refInputRef.current?.click()}
+                    disabled={uploadingRef}
+                    style={{ padding: '4px 10px', borderRadius: 8, background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 10, cursor: 'pointer' }}
+                  >Cambiar</button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setRefPhotoUrl(null); setRefPhotoPreview(null) }}
+                  style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >×</button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => refInputRef.current?.click()}
+                disabled={uploadingRef}
+                className="touch-active"
+                style={{
+                  width: '100%', padding: '24px 20px', borderRadius: 14,
+                  border: `2px dashed ${cfg.color}35`,
+                  background: `${cfg.color}06`,
+                  cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 30 }}>{uploadingRef ? '⏳' : '🖼️'}</span>
+                <span style={{ fontSize: 12, color: cfg.color, fontWeight: 700 }}>
+                  {uploadingRef ? 'Subiendo imagen...' : 'Agregar foto de referencia'}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>
+                  Muestra a los responsables cómo hacer la tarea
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Priority toggle */}

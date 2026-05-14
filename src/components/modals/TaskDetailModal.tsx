@@ -235,6 +235,25 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
                 </div>
               )}
 
+              {/* Foto de referencia — visible para todos */}
+              {task.evidencia_url && (
+                <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${cfg.color}25` }}>
+                  <div style={{ padding: '8px 12px', background: `${cfg.color}10`, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13 }}>🖼️</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color, letterSpacing: 1.4, textTransform: 'uppercase' }}>Foto de Referencia</span>
+                  </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={task.evidencia_url}
+                    alt="Referencia"
+                    style={{ width: '100%', display: 'block', maxHeight: 260, objectFit: 'cover' }}
+                  />
+                  <div style={{ padding: '8px 12px', background: 'var(--surface2)', fontSize: 10, color: 'var(--muted)' }}>
+                    Imagen de referencia para completar esta tarea correctamente
+                  </div>
+                </div>
+              )}
+
               {/* Nota admin (visible para todos, solo editable por admin) */}
               {task.nota_admin && (
                 <div style={{ background: 'rgba(212,175,55,0.04)', border: '1px solid rgba(212,175,55,0.2)', borderRadius: 12, padding: '12px 14px' }}>

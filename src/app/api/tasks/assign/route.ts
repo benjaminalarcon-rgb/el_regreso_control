@@ -103,7 +103,7 @@ function buildEmailHtml(
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { titulo, descripcion, area, sub_area, responsable_id, responsable_ids, plazo, prioridad_maxima } = body
+  const { titulo, descripcion, area, sub_area, responsable_id, responsable_ids, plazo, prioridad_maxima, evidencia_url } = body
 
   // responsable_ids puede venir como array; si no, usar responsable_id como único
   const allIds: string[] = responsable_ids?.length > 0 ? responsable_ids : [responsable_id]
@@ -137,6 +137,7 @@ export async function POST(req: NextRequest) {
       estado: 'Asignada',
       contador_retrasos: 0,
       creado_por: user.id,
+      ...(evidencia_url ? { evidencia_url } : {}),
     })
     .select('*, responsable:users(id, nombre, iniciales, rol, area, email)')
     .single()
