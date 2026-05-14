@@ -1,2 +1,2 @@
-export const SUPABASE_URL = 'https://oceptenxyaktitmszcms.supabase.co'
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jZXB0ZW54eWFrdGl0bXN6Y21zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNTI5OTYsImV4cCI6MjA5MzgyODk5Nn0.gD1JhoV8i3GcWWKfgoup2Mg6WF23V7ERFL_1pFEsS8A'
+export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!

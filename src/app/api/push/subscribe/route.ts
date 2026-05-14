@@ -34,6 +34,8 @@ export async function DELETE(req: NextRequest) {
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
   })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
   return NextResponse.json({ ok: true })
 }

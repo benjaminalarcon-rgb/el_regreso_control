@@ -5,7 +5,7 @@ import { Resend } from 'resend'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 import { sendPushToAllAdmins, sendPushToUser } from '@/lib/push'
 
-const CLAUDIO_EMAIL = 'claudio.heufemann@elregresobeer.com'
+const ADMIN_REVIEW_EMAIL = process.env.ADMIN_REVIEW_EMAIL ?? ''
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -111,7 +111,7 @@ async function notifyClaudio(task: {
 
     await resend.emails.send({
       from: `El Regreso Control <${fromEmail}>`,
-      to: [CLAUDIO_EMAIL],
+      to: [ADMIN_REVIEW_EMAIL].filter(Boolean),
       subject: `★ Por Aprobar: ${task.titulo}`,
       html: buildReviewEmailHtml({
         titulo: task.titulo,
@@ -125,12 +125,15 @@ async function notifyClaudio(task: {
       }),
     })
   } catch (e) {
-    console.error('Error enviando email a Claudio:', e)
+    console.error('Error enviando email de revisión:', e)
   }
 }
 
 export async function GET() {
   const supabase = await getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
   const { data, error } = await supabase
     .from('tasks')
     .select('*, responsable:users(id, nombre, iniciales, rol, area, email), responsable_ids')

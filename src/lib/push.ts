@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase/config'
 
 webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:benjamin.alarcon@elregresobeer.com',
+  process.env.VAPID_SUBJECT || 'mailto:admin@elregresobeer.com',
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
   process.env.VAPID_PRIVATE_KEY || ''
 )

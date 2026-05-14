@@ -171,7 +171,7 @@ export async function GET(req: Request) {
 
   // Enviar a todos los admins
   const { data: admins } = await supabase.from('users').select('email').eq('is_admin', true)
-  const adminEmails = admins?.map(a => a.email).filter(Boolean) ?? ['claudio.heufemann@elregresobeer.com']
+  const adminEmails = admins?.map(a => a.email).filter(Boolean) ?? []
 
   await resend.emails.send({
     from: `El Regreso Control <${from}>`,
