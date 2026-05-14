@@ -16,17 +16,19 @@
 
 /* ── Modo Claro ── */
 [data-theme="light"] {
-  --bg: #F2EDE4;
-  --surface: #FFFDF8;
-  --surface2: #F5EFE4;
+  --bg: #E8E2D8;
+  --surface: #FFFFFF;
+  --surface2: #F4EFE6;
   --gold: #A8870F;
-  --cream: #1C1510;
+  --cream: #1A1008;
   --muted: #6B6050;
   --dim: #8A7A6A;
-  --border: rgba(168,135,15,0.25);
-  --input-bg: rgba(0,0,0,0.05);
-  --input-color: #1C1510;
-  --input-border: rgba(168,135,15,0.3);
+  --border: rgba(0,0,0,0.12);
+  --input-bg: rgba(0,0,0,0.04);
+  --input-color: #1A1008;
+  --input-border: rgba(168,135,15,0.35);
+  --row-separator: rgba(0,0,0,0.08);
+  --card-shadow: 0 2px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
 }
 
 [data-theme="light"] body {
@@ -140,6 +142,24 @@ input::placeholder, textarea::placeholder {
 @media (hover: hover) {
   .touch-active:hover { opacity: 0.82; transition: opacity 0.12s; }
 }
+
+/* ── Task list container ── */
+.task-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--card-shadow, none);
+}
+
+/* ── Task row hover (desktop) ── */
+@media (hover: hover) {
+  .task-row:hover { background: rgba(128,128,128,0.05) !important; }
+  [data-theme="light"] .task-row:hover { background: rgba(0,0,0,0.03) !important; }
+}
+
+/* ── Dark mode row separator ── */
+:root { --row-separator: rgba(255,255,255,0.05); }
 
 /* ── Desktop layout helpers ── */
 @media (min-width: 1024px) {

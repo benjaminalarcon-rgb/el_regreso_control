@@ -405,7 +405,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: grupo.color }} />
                       <span style={{ fontSize: 10, fontWeight: 700, color: grupo.color, letterSpacing: 1.5 }}>{grupo.label.toUpperCase()} ({grupo.items.length})</span>
                     </div>
-                    <div style={{ background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 14, overflow: 'hidden' }}>
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--card-shadow, none)' }}>
                       {grupo.items.map(t => (
                         <TaskRow key={t.id} task={t} onClick={() => setSelectedTask(t)} showMeta />
                       ))}
@@ -440,7 +440,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                   <div style={{ fontSize: 14, color: 'var(--muted)' }}>No hay tareas en esta categoría</div>
                 </div>
               ) : (
-                <div style={{ background: 'var(--surface2)', border: '1px solid rgba(128,128,128,0.1)', borderRadius: 14, overflow: 'hidden' }}>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--card-shadow, none)' }}>
                   {[...currentFilter.items]
                     .sort((a, b) => a.plazo.localeCompare(b.plazo))
                     .map(t => (

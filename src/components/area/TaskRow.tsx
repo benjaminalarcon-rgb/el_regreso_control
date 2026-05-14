@@ -33,16 +33,16 @@ export default function TaskRow({ task, onClick, selectable, selected, onToggle,
   return (
     <div
       onClick={handleClick}
-      className="touch-active cursor-pointer"
+      className="touch-active cursor-pointer task-row"
       style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '14px 20px',
-        borderBottom: '1px solid rgba(128,128,128,0.08)',
+        display: 'flex', alignItems: 'center', gap: 14,
+        padding: '18px 20px',
+        borderBottom: '1px solid var(--row-separator, rgba(128,128,128,0.08))',
         borderLeft: selected
           ? '3px solid #D4AF37'
-          : task.prioridad_maxima ? '3px solid #D4AF37' : '3px solid transparent',
+          : `3px solid ${sCfg.color}`,
         background: selected ? 'rgba(212,175,55,0.06)' : 'transparent',
-        opacity: done && !selectable ? 0.55 : 1,
+        opacity: done && !selectable ? 0.45 : 1,
         transition: 'background 0.15s',
       }}
     >
@@ -67,9 +67,10 @@ export default function TaskRow({ task, onClick, selectable, selected, onToggle,
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
           {task.prioridad_maxima && <span style={{ fontSize: 11 }}>⚡</span>}
           <div style={{
-            fontSize: 14, fontWeight: 700, color: done ? 'var(--muted)' : 'var(--cream)',
+            fontSize: 15, fontWeight: 700, color: done ? 'var(--muted)' : 'var(--cream)',
             textDecoration: done ? 'line-through' : 'none',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            letterSpacing: -0.2,
           }}>
             {task.titulo}
           </div>
