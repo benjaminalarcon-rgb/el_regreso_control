@@ -278,26 +278,42 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                 )}
               </div>
 
-              {/* Stats row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: isDesktop ? 14 : 10, marginBottom: 40 }}>
+              {/* KPI Semáforo */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: isDesktop ? 12 : 8, marginBottom: 40 }}>
                 {([
-                  { key: 'activas',    label: 'Activas',    value: activas,    color: 'var(--cream)', dim: 'rgba(244,238,223,0.06)' },
-                  { key: 'en-proceso', label: 'En Proceso', value: enProceso,  color: '#E67E22',      dim: 'rgba(230,126,34,0.08)' },
-                  { key: 'aprobar',    label: 'Aprobar',    value: porAprobar, color: '#D4AF37',      dim: 'rgba(212,175,55,0.08)' },
-                  { key: 'atraso',     label: 'Atraso',     value: atrasadas,  color: '#FF4D4D',      dim: 'rgba(255,77,77,0.08)' },
-                ] as { key: FilterKey; label: string; value: number; color: string; dim: string }[]).map(s => (
-                  <button key={s.key} onClick={() => { setFilterKey(s.key); setView('filter') }}
-                    className="touch-active"
-                    style={{
-                      background: s.value > 0 ? s.dim : 'var(--surface)',
-                      border: `1px solid ${s.value > 0 ? s.color + '25' : 'rgba(128,128,128,0.08)'}`,
-                      borderRadius: 18, padding: isDesktop ? '22px 14px' : '18px 10px',
-                      cursor: 'pointer', textAlign: 'center',
-                    }}>
-                    <div style={{ fontSize: isDesktop ? 36 : 28, fontWeight: 900, color: s.value > 0 ? s.color : 'rgba(128,128,128,0.25)', lineHeight: 1, letterSpacing: -1 }}>{s.value}</div>
-                    <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.3, marginTop: 6, textTransform: 'uppercase' }}>{s.label}</div>
-                  </button>
-                ))}
+                  { key: 'activas',    label: 'Activas',    value: activas,    color: '#4A7A9B', bg: 'rgba(74,122,155,0.10)',  border: 'rgba(74,122,155,0.25)'  },
+                  { key: 'en-proceso', label: 'En Proceso', value: enProceso,  color: '#D4821A', bg: 'rgba(212,130,26,0.10)',  border: 'rgba(212,130,26,0.30)'  },
+                  { key: 'aprobar',    label: 'Aprobar',    value: porAprobar, color: '#B8941F', bg: 'rgba(184,148,31,0.10)',  border: 'rgba(184,148,31,0.30)'  },
+                  { key: 'atraso',     label: 'Atraso',     value: atrasadas,  color: '#C0392B', bg: 'rgba(192,57,43,0.10)',   border: 'rgba(192,57,43,0.30)'   },
+                ] as { key: FilterKey; label: string; value: number; color: string; bg: string; border: string }[]).map(s => {
+                  const active = s.value > 0
+                  return (
+                    <button key={s.key} onClick={() => { setFilterKey(s.key); setView('filter') }}
+                      className="touch-active"
+                      style={{
+                        background: active ? s.bg : 'var(--surface)',
+                        border: `1px solid ${active ? s.border : 'rgba(128,128,128,0.12)'}`,
+                        borderTop: `3px solid ${active ? s.color : 'rgba(128,128,128,0.15)'}`,
+                        borderRadius: 16,
+                        padding: isDesktop ? '20px 12px 16px' : '16px 8px 14px',
+                        cursor: 'pointer', textAlign: 'center',
+                        boxShadow: active ? `0 2px 12px ${s.color}18` : 'none',
+                        transition: 'all 0.15s',
+                      }}>
+                      <div style={{
+                        fontSize: isDesktop ? 38 : 30, fontWeight: 900, lineHeight: 1,
+                        letterSpacing: -1.5,
+                        color: active ? s.color : 'rgba(128,128,128,0.22)',
+                      }}>{s.value}</div>
+                      <div style={{
+                        fontSize: 9, letterSpacing: 1.5, marginTop: 7,
+                        textTransform: 'uppercase', fontWeight: 700,
+                        color: active ? s.color : 'rgba(128,128,128,0.35)',
+                        opacity: active ? 0.8 : 1,
+                      }}>{s.label}</div>
+                    </button>
+                  )
+                })}
               </div>
 
               <TodayFocus tasks={tasks} onTaskClick={setSelectedTask} />
