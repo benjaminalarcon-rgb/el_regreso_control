@@ -274,7 +274,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
                 <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 2.5, marginBottom: 12, textTransform: 'uppercase' }}>
                   {dayName} {today.getDate()} de {monthName}
                 </div>
-                <div style={{ fontSize: isDesktop ? 52 : 42, fontWeight: 900, color: 'var(--cream)', letterSpacing: -2, lineHeight: 1, marginBottom: 12 }}>
+                <div style={{ fontSize: isDesktop ? 44 : 32, fontWeight: 900, color: 'var(--cream)', letterSpacing: -1.5, lineHeight: 1, marginBottom: 12 }}>
                   Hola,<br />{userName.split(' ')[0]}.
                 </div>
                 {isAdmin && (
@@ -508,7 +508,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
               <Logo size={52} />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.4 }}>El Regreso</div>
-                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2 }}>CONTROL</div>
+                <div style={{ fontSize: 8, color: 'var(--muted)', letterSpacing: 1.2 }}>GESTIÓN</div>
               </div>
             </div>
           </div>
@@ -670,7 +670,7 @@ export default function Dashboard({ initialTasks, users, userName, userEmail, is
       <div className="safe-top" style={{ display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12, background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <Logo size={68} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>El Regreso Control</div>
+          <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>El Regreso Gestión</div>
           <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: 1.4 }}>SISTEMA OPERATIVO EJECUTIVO</div>
         </div>
         <button onClick={refreshTasks} className="touch-active" title="Actualizar"
