@@ -40,10 +40,12 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
   // Evidence
   const [uploadingAntes, setUploadingAntes] = useState(false)
   const [uploadingDespues, setUploadingDespues] = useState(false)
+  const [uploadingRef, setUploadingRef] = useState(false)
   const [resumen, setResumen] = useState(task.resumen_cierre ?? '')
   const [savingResumen, setSavingResumen] = useState(false)
   const antesRef = useRef<HTMLInputElement>(null)
   const despuesRef = useRef<HTMLInputElement>(null)
+  const refPhotoRef = useRef<HTMLInputElement>(null)
 
   const cfg = AREA_CFG[task.area] ?? { color: '#D4AF37', dim: '#141007', code: '??' }
   const plazo = formatPlazo(task.plazo)
@@ -88,6 +90,20 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
       console.error('Upload error:', e)
     }
     setter(false)
+  }
+
+  async function uploadRefPhoto(file: File) {
+    setUploadingRef(true)
+    try {
+      const supabase = createClient()
+      const compressed = await compressImage(file, { maxDim: 1200, quality: 0.78 })
+      const path = `tasks/${task.id}/ref-${Date.now()}.jpg`
+      const { error } = await supabase.storage.from('task-evidence').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      if (error) throw error
+      const { data: { publicUrl } } = supabase.storage.from('task-evidence').getPublicUrl(path)
+      await patch({ evidencia_url: publicUrl })
+    } catch (e) { console.error('Ref photo upload error:', e) }
+    setUploadingRef(false)
   }
 
   async function saveResumen() {
@@ -461,6 +477,54 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate, 
               <div>
                 <label style={{ fontSize: 10, fontWeight: 600, color: '#3A3530', letterSpacing: 1.4, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Descripción</label>
                 <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={3} style={{ borderRadius: 12 }} />
+              </div>
+
+              {/* Foto de referencia */}
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: '#D4AF37', letterSpacing: 1.4, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Foto de Referencia</label>
+                <input
+                  ref={refPhotoRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadRefPhoto(f) }}
+                />
+                {task.evidencia_url ? (
+                  <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#161616' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={task.evidencia_url} alt="Referencia" style={{ width: '100%', display: 'block', maxHeight: 200, objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', bottom: 8, left: 0, right: 0, display: 'flex', gap: 8, justifyContent: 'center' }}>
+                      <button
+                        onClick={() => refPhotoRef.current?.click()}
+                        disabled={uploadingRef}
+                        style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, cursor: 'pointer' }}
+                      >{uploadingRef ? '⏳ Subiendo...' : '🖼️ Cambiar foto'}</button>
+                      <button
+                        onClick={() => patch({ evidencia_url: null as unknown as string })}
+                        disabled={uploadingRef}
+                        style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(200,40,40,0.7)', border: '1px solid rgba(255,80,80,0.3)', color: '#fff', fontSize: 11, cursor: 'pointer' }}
+                      >× Quitar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => refPhotoRef.current?.click()}
+                    disabled={uploadingRef}
+                    className="touch-active"
+                    style={{
+                      width: '100%', padding: '22px 20px', borderRadius: 12,
+                      border: '2px dashed rgba(212,175,55,0.3)',
+                      background: 'rgba(212,175,55,0.04)',
+                      cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+                    }}
+                  >
+                    <span style={{ fontSize: 28 }}>{uploadingRef ? '⏳' : '🖼️'}</span>
+                    <span style={{ fontSize: 12, color: '#D4AF37', fontWeight: 700 }}>
+                      {uploadingRef ? 'Subiendo...' : 'Agregar foto de referencia'}
+                    </span>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Los responsables la verán en el detalle de la tarea</span>
+                  </button>
+                )}
               </div>
 
               {/* Nota y recomendaciones */}
