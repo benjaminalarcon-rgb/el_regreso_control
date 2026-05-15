@@ -23,6 +23,7 @@ export default function ReportPanel({ tasks, commentCounts }: Props) {
   const [sendState, setSendState]   = useState<SendState>('idle')
   const [sentTo, setSentTo]         = useState('')
   const [errorMsg, setErrorMsg]     = useState('')
+  const [lastPdfBase64, setLastPdfBase64] = useState<string | null>(null)
 
   const scopedTasks = useMemo(() => {
     const base = tasks.filter(t => t.area !== 'Mi Cerebro')
@@ -39,41 +40,76 @@ export default function ReportPanel({ tasks, commentCounts }: Props) {
 
   const cfg = scope !== 'all' ? AREA_CFG[scope] : null
 
-  async function handleGenerate() {
+  // Genera el PDF y lo guarda en estado; retorna base64 o null
+  async function buildPdf(): Promise<string | null> {
+    const { generateReportPDF } = await import('@/lib/generate-pdf')
+    return generateReportPDF({
+      area: scope === 'all' ? undefined : scope,
+      tasks,
+      commentCounts,
+    })
+  }
+
+  function downloadPdf(base64: string) {
+    const filename = scope === 'all'
+      ? `reporte-general-${new Date().toISOString().slice(0, 10)}.pdf`
+      : `reporte-${scope.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`
+    const link = document.createElement('a')
+    link.href = `data:application/pdf;base64,${base64}`
+    link.download = filename
+    link.click()
+  }
+
+  async function handleDownload() {
+    if (scopedTasks.length === 0) return
+    setSendState('generating')
+    setErrorMsg('')
+    try {
+      const base64 = await buildPdf()
+      if (!base64) throw new Error('PDF vacío')
+      setLastPdfBase64(base64)
+      downloadPdf(base64)
+      setSendState('idle')
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Error generando el PDF')
+      setSendState('error')
+    }
+  }
+
+  async function handleSend() {
     if (scopedTasks.length === 0) return
     setSendState('generating')
     setErrorMsg('')
 
     try {
-      // Dynamic import to avoid SSR issues
-      const { generateReportPDF } = await import('@/lib/generate-pdf')
-      const pdfBase64 = generateReportPDF({
-        area: scope === 'all' ? undefined : scope,
-        tasks,
-        commentCounts,
-      })
+      // Reutiliza el PDF ya generado si existe, sino genera uno nuevo
+      let base64 = lastPdfBase64
+      if (!base64) {
+        base64 = await buildPdf()
+        if (!base64) throw new Error('PDF vacío')
+        setLastPdfBase64(base64)
+      }
 
       setSendState('sending')
       const res = await fetch('/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pdfBase64,
+          pdfBase64: base64,
           area: scope === 'all' ? null : scope,
           recipientEmail: email.trim() || undefined,
         }),
       })
 
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Error desconocido')
+        throw new Error(data.error ?? `Error HTTP ${res.status}`)
       }
 
-      const data = await res.json()
       setSentTo(data.sentTo ?? email)
       setSendState('done')
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Error generando el reporte')
+      setErrorMsg(e instanceof Error ? e.message : 'Error enviando el reporte')
       setSendState('error')
     }
   }
@@ -82,6 +118,7 @@ export default function ReportPanel({ tasks, commentCounts }: Props) {
     setSendState('idle')
     setErrorMsg('')
     setSentTo('')
+    setLastPdfBase64(null)
   }
 
   const busy = sendState === 'generating' || sendState === 'sending'
@@ -281,7 +318,7 @@ export default function ReportPanel({ tasks, commentCounts }: Props) {
           </div>
         </div>
 
-        {/* Send button + states */}
+        {/* Actions */}
         {sendState === 'done' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{
@@ -293,18 +330,34 @@ export default function ReportPanel({ tasks, commentCounts }: Props) {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, color: '#16A34A', marginBottom: 2 }}>Reporte enviado exitosamente</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>Enviado a: <strong style={{ color: 'var(--cream)' }}>{sentTo}</strong></div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Revisa tu bandeja de entrada (y spam por si acaso)</div>
               </div>
             </div>
-            <button
-              onClick={reset}
-              style={{
-                padding: '11px', borderRadius: 12, cursor: 'pointer',
-                background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.15)',
-                fontSize: 12, color: 'var(--muted)', fontWeight: 600,
-              }}
-            >
-              Generar otro reporte
-            </button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {lastPdfBase64 && (
+                <button
+                  onClick={() => downloadPdf(lastPdfBase64!)}
+                  style={{
+                    padding: '11px', borderRadius: 12, cursor: 'pointer',
+                    background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)',
+                    fontSize: 12, color: '#3B82F6', fontWeight: 700,
+                  }}
+                >
+                  ↓ Descargar PDF
+                </button>
+              )}
+              <button
+                onClick={reset}
+                style={{
+                  padding: '11px', borderRadius: 12, cursor: 'pointer',
+                  background: 'rgba(128,128,128,0.07)', border: '1px solid rgba(128,128,128,0.15)',
+                  fontSize: 12, color: 'var(--muted)', fontWeight: 600,
+                  gridColumn: lastPdfBase64 ? 'auto' : '1 / -1',
+                }}
+              >
+                Generar otro reporte
+              </button>
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -312,53 +365,63 @@ export default function ReportPanel({ tasks, commentCounts }: Props) {
               <div style={{
                 padding: '11px 14px', borderRadius: 12,
                 background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)',
-                fontSize: 12, color: '#FF6666',
+                fontSize: 12, color: '#FF6666', lineHeight: 1.5,
               }}>
                 ✕ {errorMsg}
               </div>
             )}
 
-            <button
-              onClick={handleGenerate}
-              disabled={busy || scopedTasks.length === 0}
-              className="touch-active"
-              style={{
-                padding: '15px', borderRadius: 14, cursor: busy || scopedTasks.length === 0 ? 'not-allowed' : 'pointer',
-                background: busy ? 'rgba(212,175,55,0.06)' : 'rgba(212,175,55,0.12)',
-                border: `1px solid ${busy ? 'rgba(212,175,55,0.2)' : 'rgba(212,175,55,0.4)'}`,
-                fontSize: 13, fontWeight: 800, color: '#D4AF37',
-                opacity: scopedTasks.length === 0 ? 0.4 : 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                transition: 'all 0.15s',
-              }}
-            >
-              {sendState === 'generating' && (
-                <>
-                  <span style={{ fontSize: 16 }}>⏳</span>
-                  Generando PDF…
-                </>
-              )}
-              {sendState === 'sending' && (
-                <>
-                  <span style={{ fontSize: 16 }}>📤</span>
-                  Enviando por correo…
-                </>
-              )}
-              {(sendState === 'idle' || sendState === 'error') && (
-                <>
-                  <span style={{ fontSize: 16 }}>📄</span>
-                  Generar y Enviar Reporte PDF
-                  {scope !== 'all' && ` · ${scope}`}
-                </>
-              )}
-            </button>
+            {/* Botones principales */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
+              {/* Descargar */}
+              <button
+                onClick={handleDownload}
+                disabled={busy || scopedTasks.length === 0}
+                className="touch-active"
+                style={{
+                  padding: '15px 10px', borderRadius: 14,
+                  cursor: busy || scopedTasks.length === 0 ? 'not-allowed' : 'pointer',
+                  background: 'rgba(59,130,246,0.08)',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  fontSize: 12, fontWeight: 700, color: '#3B82F6',
+                  opacity: scopedTasks.length === 0 ? 0.4 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+              >
+                <span>↓</span>
+                Descargar
+              </button>
+
+              {/* Enviar por email */}
+              <button
+                onClick={handleSend}
+                disabled={busy || scopedTasks.length === 0}
+                className="touch-active"
+                style={{
+                  padding: '15px', borderRadius: 14,
+                  cursor: busy || scopedTasks.length === 0 ? 'not-allowed' : 'pointer',
+                  background: busy ? 'rgba(212,175,55,0.06)' : 'rgba(212,175,55,0.12)',
+                  border: `1px solid ${busy ? 'rgba(212,175,55,0.2)' : 'rgba(212,175,55,0.4)'}`,
+                  fontSize: 13, fontWeight: 800, color: '#D4AF37',
+                  opacity: scopedTasks.length === 0 ? 0.4 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {sendState === 'generating' && <><span>⏳</span> Generando PDF…</>}
+                {sendState === 'sending'    && <><span>📤</span> Enviando…</>}
+                {(sendState === 'idle' || sendState === 'error') && (
+                  <><span>✉</span> Enviar por Email{scope !== 'all' ? ` · ${scope}` : ''}</>
+                )}
+              </button>
+            </div>
 
             <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
               {[
-                `${scope === 'all' ? 'General' : 'Específico'}`,
+                scope === 'all' ? 'General' : 'Específico',
                 `${scopedTasks.length} tareas`,
                 'PDF A4',
-                'Con análisis automático',
+                'Análisis automático',
               ].map(tag => (
                 <span key={tag} style={{
                   fontSize: 9, padding: '2px 8px', borderRadius: 20,

@@ -109,7 +109,10 @@ export async function POST(req: NextRequest) {
     const resend = new Resend(resendKey)
     const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
 
-    await resend.emails.send({
+    console.log(`[reports] Enviando PDF a: ${toEmail} desde: ${fromEmail}`)
+
+    // Resend v6 devuelve { data, error } — no lanza excepciones en errores de API
+    const { data, error } = await resend.emails.send({
       from: `El Regreso Control <${fromEmail}>`,
       to: [toEmail],
       subject: area
@@ -119,14 +122,25 @@ export async function POST(req: NextRequest) {
       attachments: [
         {
           filename,
-          content: Buffer.from(pdfBase64, 'base64'),
+          // Resend v6 acepta base64 string directamente
+          content: pdfBase64,
         },
       ],
     })
 
-    return NextResponse.json({ ok: true, sentTo: toEmail })
+    if (error) {
+      console.error('[reports] Resend error:', JSON.stringify(error))
+      return NextResponse.json(
+        { error: `Error Resend: ${(error as { message?: string }).message ?? JSON.stringify(error)}` },
+        { status: 500 },
+      )
+    }
+
+    console.log(`[reports] Email enviado. ID: ${data?.id}`)
+    return NextResponse.json({ ok: true, sentTo: toEmail, emailId: data?.id })
   } catch (e) {
-    console.error('Error enviando reporte:', e)
-    return NextResponse.json({ error: 'Error al enviar el email' }, { status: 500 })
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[reports] Error inesperado:', msg)
+    return NextResponse.json({ error: `Error inesperado: ${msg}` }, { status: 500 })
   }
 }
