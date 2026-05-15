@@ -10,6 +10,7 @@ import {
   calcReactionTime,
   SEMAPHORE_HEX,
 } from '@/lib/kpis'
+import ReportPanel from '@/components/reports/ReportPanel'
 
 const ALL_AREAS = (Object.values(MACRO_AREAS) as typeof MACRO_AREAS[MacroKey][])
   .flatMap(m => [...m.areas])
@@ -466,58 +467,155 @@ export default function GestionPanel({ tasks }: Props) {
         </div>
       )}
 
-      {/* ── Ranking table ── */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden' }}>
-        {/* Table header */}
-        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 2 }}>Ranking de Áreas</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)' }}>Ordenado por tareas en estado crítico (rojo) · mayor riesgo primero</div>
+      {/* ── Ranking por macro-área ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--cream)', marginBottom: 2 }}>Ranking por Área</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)' }}>Agrupado por unidad de negocio · mayor riesgo primero dentro de cada grupo</div>
         </div>
 
-        {/* Column labels */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '28px 1fr 40px 40px 40px 40px 56px 56px',
-          gap: 8, padding: '10px 16px',
-          borderBottom: '1px solid rgba(128,128,128,0.08)',
-        }}>
-          {['#', 'Área', '🔴', '🟡', '🟢', '🔵', 'OTCR', 'Ping'].map((h, i) => (
-            <div key={i} style={{
-              fontSize: 8, fontWeight: 800, color: 'var(--muted)',
-              letterSpacing: 1, textTransform: 'uppercase',
-              textAlign: i > 1 ? 'center' : 'left',
-            }}>{h}</div>
-          ))}
-        </div>
+        {(Object.entries(MACRO_AREAS) as [MacroKey, typeof MACRO_AREAS[MacroKey]][]).map(([macroKey, macro]) => {
+          const macroAreaNames = macro.areas as readonly string[]
+          const macroKpis = areaKpis
+            .filter(a => macroAreaNames.includes(a.area) && a.total > 0)
+            .sort((a, b) => b.red - a.red || b.yellow - a.yellow || a.otcr - b.otcr)
 
-        {/* Rows */}
-        <div style={{ padding: '8px 8px' }}>
-          {ranked.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 0', fontSize: 12, color: 'var(--muted)' }}>
-              Sin datos disponibles
+          if (macroKpis.length === 0) return null
+
+          // Subtotales del grupo
+          const mTotal  = macroKpis.reduce((s, a) => s + a.total, 0)
+          const mRed    = macroKpis.reduce((s, a) => s + a.red, 0)
+          const mYellow = macroKpis.reduce((s, a) => s + a.yellow, 0)
+          const mGreen  = macroKpis.reduce((s, a) => s + a.green, 0)
+          const mBlue   = macroKpis.reduce((s, a) => s + a.blue, 0)
+          const mOtcr   = macroKpis.filter(a => a.otcr > 0).length > 0
+            ? Math.round(macroKpis.reduce((s, a) => s + a.otcr, 0) / macroKpis.filter(a => a.otcr > 0).length)
+            : 0
+          const mRedPct = mTotal > 0 ? Math.round((mRed / mTotal) * 100) : 0
+          const mOtcrColor = mOtcr >= 85 ? '#16A34A' : mOtcr >= 60 ? '#D97706' : '#DC2626'
+          const macroBest  = [...macroKpis].sort((a, b) => b.otcr - a.otcr || a.red - b.red)[0]
+          const macroWorst = macroKpis[0]
+
+          return (
+            <div key={macroKey} style={{ background: 'var(--surface)', border: `1px solid ${macro.color}30`, borderRadius: 20, overflow: 'hidden' }}>
+
+              {/* Macro header */}
+              <div style={{
+                padding: '16px 20px',
+                background: `${macro.color}08`,
+                borderBottom: `1px solid ${macro.color}20`,
+                display: 'flex', alignItems: 'center', gap: 14,
+              }}>
+                {/* Icon */}
+                <div style={{
+                  width: 40, height: 40, borderRadius: 13, flexShrink: 0,
+                  background: `${macro.color}18`, border: `1px solid ${macro.color}35`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 900, color: macro.color,
+                }}>{macro.code}</div>
+
+                {/* Name + subtitle */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--cream)', letterSpacing: -0.4 }}>{macro.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                    {mTotal} tareas · {macroKpis.length} área{macroKpis.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+
+                {/* Subtotals chips */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {mRed > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)' }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: SEMAPHORE_HEX.red }} />
+                      <span style={{ fontSize: 11, fontWeight: 800, color: SEMAPHORE_HEX.red }}>{mRed}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: `${mOtcrColor}12`, border: `1px solid ${mOtcrColor}30` }}>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>OTCR</span>
+                    <span style={{ fontSize: 12, fontWeight: 900, color: mOtcrColor }}>{mOtcr > 0 ? `${mOtcr}%` : '—'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: 'rgba(128,128,128,0.08)', border: '1px solid rgba(128,128,128,0.15)' }}>
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Riesgo</span>
+                    <span style={{ fontSize: 12, fontWeight: 900, color: mRed > 0 ? '#DC2626' : '#16A34A' }}>{mRedPct}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar of group */}
+              <div style={{ height: 3, background: 'rgba(128,128,128,0.08)', display: 'flex' }}>
+                {mRed > 0    && <div style={{ flex: mRed,    background: SEMAPHORE_HEX.red    }} />}
+                {mYellow > 0 && <div style={{ flex: mYellow, background: SEMAPHORE_HEX.yellow }} />}
+                {mGreen > 0  && <div style={{ flex: mGreen,  background: SEMAPHORE_HEX.green  }} />}
+                {mBlue > 0   && <div style={{ flex: mBlue,   background: SEMAPHORE_HEX.blue   }} />}
+              </div>
+
+              {/* Column headers */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '28px 1fr 40px 40px 40px 40px 56px 56px',
+                gap: 8, padding: '10px 16px',
+                borderBottom: '1px solid rgba(128,128,128,0.07)',
+                background: 'rgba(128,128,128,0.02)',
+              }}>
+                {['#', 'Área', '🔴', '🟡', '🟢', '🔵', 'OTCR', 'Ping'].map((h, i) => (
+                  <div key={i} style={{
+                    fontSize: 8, fontWeight: 800, color: 'var(--muted)',
+                    letterSpacing: 1, textTransform: 'uppercase',
+                    textAlign: i > 1 ? 'center' : 'left',
+                  }}>{h}</div>
+                ))}
+              </div>
+
+              {/* Area rows */}
+              <div style={{ padding: '6px 8px 8px' }}>
+                {macroKpis.map((kpi, idx) => (
+                  <RankRow
+                    key={kpi.area}
+                    rank={idx + 1}
+                    kpi={kpi}
+                    pimponeo={kpi.pimponeo}
+                    isBest={kpi.area === macroBest?.area && macroBest?.otcr > 0}
+                    isWorst={kpi.area === macroWorst?.area && macroWorst?.red > 0 && kpi.area !== macroBest?.area}
+                  />
+                ))}
+              </div>
+
+              {/* Macro footer: best / worst */}
+              {(macroBest || macroWorst) && (
+                <div style={{ padding: '10px 16px 14px', borderTop: '1px solid rgba(128,128,128,0.07)', display: 'flex', gap: 10 }}>
+                  {macroBest && macroBest.otcr > 0 && (
+                    <div style={{ flex: 1, padding: '8px 12px', background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.18)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 8, fontWeight: 700, color: '#16A34A', letterSpacing: 1.2, marginBottom: 3 }}>↑ MEJOR</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>{macroBest.area}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#16A34A' }}>{macroBest.otcr}% efectividad</div>
+                    </div>
+                  )}
+                  {macroWorst && macroWorst.red > 0 && macroWorst.area !== macroBest?.area && (
+                    <div style={{ flex: 1, padding: '8px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.18)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 8, fontWeight: 700, color: '#DC2626', letterSpacing: 1.2, marginBottom: 3 }}>↓ MAYOR RIESGO</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--cream)' }}>{macroWorst.area}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#DC2626' }}>{macroWorst.red} tarea{macroWorst.red !== 1 ? 's' : ''} en rojo</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          ) : ranked.map((kpi, idx) => (
-            <RankRow
-              key={kpi.area}
-              rank={idx + 1}
-              kpi={kpi}
-              pimponeo={kpi.pimponeo}
-              isBest={kpi.area === bestArea?.area}
-              isWorst={kpi.area === worstArea?.area && kpi.area !== bestArea?.area}
-            />
-          ))}
-        </div>
+          )
+        })}
 
         {/* Legend */}
-        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 4 }}>
           {[
-            { label: 'OTCR: Efectividad de entrega (meta ≥ 85%)', color: 'var(--muted)' },
-            { label: 'Ping: Comentarios promedio por tarea (meta < 2)', color: 'var(--muted)' },
+            { label: 'OTCR: Efectividad de entrega (meta ≥ 85%)' },
+            { label: 'Ping: Comentarios promedio por tarea (meta < 2)' },
           ].map(l => (
-            <span key={l.label} style={{ fontSize: 9, color: l.color }}>{l.label}</span>
+            <span key={l.label} style={{ fontSize: 9, color: 'var(--muted)' }}>{l.label}</span>
           ))}
         </div>
       </div>
+
+      {/* ── Report Generator ── */}
+      <ReportPanel tasks={tasks} commentCounts={commentCounts} />
 
     </div>
   )
